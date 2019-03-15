@@ -1,25 +1,32 @@
 #include "utils.hpp"
-#include <stdexcept>
+#include <iostream>
+#include <netdb.h>
+#include <netinet/in.h>
 
 ipx_session *
 copy_ipx_session(const ipx_session *session)
 {
     ipx_session *new_session;
+
     switch (session->type) {
     case FDS_SESSION_TCP:
         new_session = ipx_session_new_tcp(&session->tcp.net);
         break;
+
     case FDS_SESSION_UDP:
         new_session = ipx_session_new_udp(
             &session->udp.net, session->udp.lifetime.tmplts, session->udp.lifetime.opts_tmplts);
         break;
+
     case FDS_SESSION_FILE:
         new_session = ipx_session_new_file(session->file.file_path);
         break;
+
     case FDS_SESSION_SCTP:
         new_session = ipx_session_new_sctp(&session->sctp.net);
         break;
     }
+
     return new_session;
 }
 
@@ -52,11 +59,13 @@ compare_ipx_session_net(const ipx_session_net *a, const ipx_session_net *b)
     if (a->l3_proto == AF_INET) {
         return compare_in_addr(a->addr_src.ipv4, b->addr_src.ipv4)
             && compare_in_addr(a->addr_dst.ipv4, b->addr_dst.ipv4);
+
     } else if (a->l3_proto == AF_INET6) {
         return compare_in6_addr(a->addr_src.ipv6, b->addr_src.ipv6)
             && compare_in6_addr(a->addr_dst.ipv6, b->addr_dst.ipv6);
+
     } else {
-        throw std::runtime_error("unknown l3 proto");
+        assert(false && "unknown l3 proto");
     }
 }
 
@@ -81,14 +90,14 @@ compare_ipx_session(const ipx_session *a, const ipx_session *b)
         return compare_ipx_session_net(&a->sctp.net, &b->sctp.net);
 
     default:
-        throw std::runtime_error("unknown session type");
+        assert(false && "unknown session type");
     }
 }
 
 ipx_msg_ctx
 copy_ipx_msg_ctx(ipx_msg_ctx ctx)
 {
-    // does not copy session!
+    // session is ignored
     ipx_msg_ctx new_ctx;
     new_ctx.odid = ctx.odid;
     new_ctx.stream = ctx.stream;
@@ -99,6 +108,49 @@ copy_ipx_msg_ctx(ipx_msg_ctx ctx)
 bool
 compare_ipx_msg_ctx(ipx_msg_ctx a, ipx_msg_ctx b)
 {
-    // does not compare session!
+    // session is ignored
     return a.odid == b.odid && a.stream == b.stream;
+}
+
+std::string
+get_hostname(const ipx_session *session)
+{
+    const ipx_session_net *net;
+    switch (session->type) {
+    case FDS_SESSION_TCP:
+        net = &session->tcp.net;
+        break;
+    case FDS_SESSION_UDP:
+        net = &session->udp.net;
+        break;
+    case FDS_SESSION_SCTP:
+        net = &session->sctp.net;
+        break;
+    default:
+        return "";
+    }
+
+    constexpr int hostname_size = 256;
+    char hostname[hostname_size] = {'\0'};
+    int rc;
+    if (net->l3_proto == AF_INET) {
+        sockaddr_in sa;
+        memset(&sa, 0, sizeof(sa));
+        sa.sin_family = AF_INET;
+        sa.sin_addr = net->addr_src.ipv4;
+        rc = getnameinfo(
+            reinterpret_cast<sockaddr *>(&sa), sizeof(sa), hostname, hostname_size, nullptr, 0, 0);
+    } else if (net->l3_proto == AF_INET6) {
+        sockaddr_in6 sa;
+        memset(&sa, 0, sizeof(sa));
+        sa.sin6_family = AF_INET6;
+        sa.sin6_addr = net->addr_src.ipv6;
+        rc = getnameinfo(
+            reinterpret_cast<sockaddr *>(&sa), sizeof(sa), hostname, hostname_size, nullptr, 0, 0);
+    }
+    if (rc == 0) {
+        return std::string(hostname);
+    } else {
+        return "";
+    }
 }

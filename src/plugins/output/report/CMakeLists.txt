@@ -3,8 +3,9 @@ add_library(report-output MODULE
     src/plugin.cpp
     src/report.cpp
     src/report.hpp
-    src/utils.cpp
     src/utils.hpp
+    src/utils.cpp
+    src/histogram.hpp
     src/output.hpp
     src/output.cpp
 )

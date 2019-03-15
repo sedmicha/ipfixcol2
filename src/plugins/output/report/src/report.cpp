@@ -1,159 +1,20 @@
 #include "report.hpp"
-#include "utils.hpp"
 #include <libfds.h>
 #include <iostream>
+#include <algorithm>
 
-#define PEN_IANA 0
-#define PEN_IANA_REV 29305
-#define ID_FlowStartSeconds 150U
-#define ID_FlowEndSeconds 151U
-#define ID_FlowStartMilliseconds 152U
-#define ID_FlowEndMilliseconds 153U
-#define ID_FlowStartMicroseconds 154U
-#define ID_FlowEndMicroseconds 155U
-#define ID_FlowStartNanoseconds 156U
-#define ID_FlowEndNanoseconds 157U
+constexpr uint16_t PEN_IANA = 0;
+constexpr uint16_t PEN_IANA_REV = 29305;
+constexpr uint16_t ID_FlowStartSeconds = 150U;
+constexpr uint16_t ID_FlowEndSeconds = 151U;
+constexpr uint16_t ID_FlowStartMilliseconds = 152U;
+constexpr uint16_t ID_FlowEndMilliseconds = 153U;
+constexpr uint16_t ID_FlowStartMicroseconds = 154U;
+constexpr uint16_t ID_FlowEndMicroseconds = 155U;
+constexpr uint16_t ID_FlowStartNanoseconds = 156U;
+constexpr uint16_t ID_FlowEndNanoseconds = 157U;
 
 Report::Report(Config &config, fds_iemgr *iemgr) : config(config), iemgr(iemgr) {}
-
-Report::~Report()
-{
-    for (Session &session : sessions) {
-        session_destroy(session);
-    }
-}
-
-Session &
-Report::session_new(const ipx_session *ipx_session_)
-{
-    sessions.emplace_back();
-    Session &session = sessions.back();
-    session.ipx_session_ = copy_ipx_session(ipx_session_);
-    if (session.ipx_session_ == nullptr) {
-        throw std::runtime_error("copying ipx_session failed");
-    }
-    return session;
-}
-
-Session &
-Report::session_get(const ipx_session *ipx_session_)
-{
-    for (Session &session : sessions) {
-        if (compare_ipx_session(session.ipx_session_, ipx_session_) && session.is_opened) {
-            return session;
-        }
-    }
-    throw std::runtime_error("session not found");
-}
-
-void
-Report::session_destroy(Session &session)
-{
-    for (Context &context : session.contexts) {
-        context_destroy(context);
-    }
-    ipx_session_destroy(session.ipx_session_);
-}
-
-Context &
-Report::context_new(Session &session, ipx_msg_ctx ipx_ctx_)
-{
-    session.contexts.emplace_back();
-    Context &context = session.contexts.back();
-    context.ipx_ctx_ = copy_ipx_msg_ctx(ipx_ctx_);
-    context.ipx_ctx_.session = session.ipx_session_;
-    histogram_init(context.flow_time_hgram, 30, 22, -600);
-    return context;
-}
-
-Context *
-Report::context_find(Session &session, ipx_msg_ctx ipx_ctx_)
-{
-    for (Context &context : session.contexts) {
-        if (compare_ipx_msg_ctx(context.ipx_ctx_, ipx_ctx_)) {
-            return &context;
-        }
-    }
-    return nullptr;
-}
-
-void
-Report::context_destroy(Context &context)
-{
-    for (Template &template_ : context.templates) {
-        template_destroy(template_);
-    }
-}
-
-Template &
-Report::template_new(Context &context)
-{
-    context.templates.emplace_back();
-    Template &template_ = context.templates.back();
-    return template_;
-}
-
-Template *
-Report::template_find(Context &context, int template_id)
-{
-    for (Template &template_ : context.templates) {
-        if (template_.template_id == template_id) {
-            return &template_;
-        }
-    }
-    return nullptr;
-}
-
-Template &
-Report::template_get(Context &context, int template_id)
-{
-    Template *template_ = template_find(context, template_id);
-    if (template_ == nullptr) {
-        throw std::runtime_error("template not found");
-    }
-    return *template_;
-}
-
-void
-Report::template_destroy(Template &template_)
-{
-    fds_template_destroy(template_.data.tmplt);
-    for (Template::Data &template_data : template_.history) {
-        fds_template_destroy(template_data.tmplt);
-    }
-}
-
-void
-Report::histogram_init(Histogram &histogram, int bin_size, int bin_cnt, int offset)
-{
-    histogram.bin_cnt = bin_cnt;
-    histogram.bin_size = bin_size;
-    histogram.offset = offset;
-    histogram.bins.resize(bin_cnt + 2);
-    for (int i = 0; i < bin_cnt + 2; i++) {
-        histogram.bins[i] = 0;
-    }
-}
-
-void
-Report::histogram_record(Histogram &histogram, int value)
-{
-    int idx;
-    if (value < histogram.offset) {
-        idx = 0;
-    } else if (value > histogram.bin_size * histogram.bin_cnt) {
-        idx = histogram.bin_cnt + 1;
-    } else {
-        idx = (value - histogram.offset) / histogram.bin_size + 1;
-    }
-    histogram.bins[idx]++;
-}
-
-int
-Report::histogram_idx_value(Histogram &histogram, int index)
-{
-    return histogram.bin_size * index + histogram.offset;
-}
 
 void
 Report::process_session_msg(ipx_msg_session *msg)
@@ -162,160 +23,268 @@ Report::process_session_msg(ipx_msg_session *msg)
     const ipx_session *ipx_session_ = ipx_msg_session_get_session(msg);
 
     if (event == IPX_MSG_SESSION_OPEN) {
-        Session &session = session_new(ipx_session_);
+        // Create new session
+        sessions.emplace_back();
+        session_s &session = sessions.back();
+        session.ipx_session_ = unique_ptr_ipx_session(copy_ipx_session(ipx_session_));
+        if (session.ipx_session_ == nullptr) {
+            throw std::runtime_error("copying ipx_session failed");
+        }
         session.time_opened = std::time(nullptr);
         session.is_opened = true;
-        std::cout << "Opened new session " << &session << "\n";
+        session.hostname = get_hostname(ipx_session_);
 
     } else if (event == IPX_MSG_SESSION_CLOSE) {
-        Session &session = session_get(ipx_session_);
+        // Close existing session
+        session_s &session = get_session(ipx_session_);
         session.time_closed = std::time(nullptr);
         session.is_opened = false;
-        std::cout << "Closed session " << &session << "\n";
+
+    } else {
+        assert(false && "unhandled session event");
     }
+}
+
+session_s &
+Report::get_session(const ipx_session *ipx_session_)
+{
+    for (session_s &session : sessions) {
+        if (compare_ipx_session(session.ipx_session_.get(), ipx_session_) && session.is_opened) {
+            return session;
+        }
+    }
+    // Session should always be found as it gets created on SESSION_OPEN event
+    assert(false && "session not found");
 }
 
 void
 Report::process_ipfix_msg(ipx_msg_ipfix *msg)
 {
+    // Get corresponding session and context
     ipx_msg_ctx *ipx_ctx_ = ipx_msg_ipfix_get_ctx(msg);
-    Session &session = session_get(ipx_ctx_->session);
-    std::cout << "Got session: " << &session << "\n";
+    session_s &session = get_session(ipx_ctx_->session);
+    context_s &context = get_or_create_context(session, ipx_ctx_);
 
-    Context *context = context_find(session, *ipx_ctx_);
-    if (context == nullptr) {
-        context = &context_new(session, *ipx_ctx_);
-        context->first_seen = std::time(nullptr);
-        context->last_seen = context->first_seen;
-    } else {
-        context->last_seen = std::time(nullptr);
-    }
-    std::cout << "Got context: " << context << "\n";
-
+    // Iterate over sets
     struct ipx_ipfix_set *sets;
     size_t set_cnt;
     ipx_msg_ipfix_get_sets(msg, &sets, &set_cnt);
     for (int i = 0; i < set_cnt; i++) {
         int set_id = ntohs(sets[i].ptr->flowset_id);
-        if (set_id == FDS_IPFIX_SET_TMPLT) {
-            process_template_set(*context, &sets[i]);
+        if (set_id == FDS_IPFIX_SET_TMPLT || set_id == FDS_IPFIX_SET_OPTS_TMPLT) {
+            process_template_set(context, &sets[i], set_id);
         } else if (set_id >= FDS_IPFIX_SET_MIN_DSET) {
-            process_data_set(*context, &sets[i]);
+            process_data_set(context, &sets[i], set_id);
+        } else {
+            assert(false && "unhandled set id");
         }
     }
 
+    // Iterate over data records
     int drec_cnt = ipx_msg_ipfix_get_drec_cnt(msg);
     for (int i = 0; i < drec_cnt; i++) {
         ipx_ipfix_record *ipfix_rec = ipx_msg_ipfix_get_drec(msg, i);
-        process_data_record(*context, &ipfix_rec->rec);
+        process_data_record(context, &ipfix_rec->rec);
     }
+}
+context_s &
+Report::get_or_create_context(session_s &session, const ipx_msg_ctx *ipx_ctx_)
+{
+    // Try to find context if it exists
+    for (context_s &context : session.contexts) {
+        if (compare_ipx_msg_ctx(context.ipx_ctx_, *ipx_ctx_)) {
+            context.last_seen = std::time(nullptr);
+            return context;
+        }
+    }
+    // Create new context
+    session.contexts.emplace_back();
+    context_s &context = session.contexts.back();
+    context.first_seen = context.last_seen = std::time(nullptr);
+    context.ipx_ctx_ = copy_ipx_msg_ctx(*ipx_ctx_);
+    context.ipx_ctx_.session = session.ipx_session_.get();
+    context.flow_time_histo = Histogram(-600, 60, 30);
+    context.refresh_time_histo = Histogram(0, 1800, 60);
+    return context;
 }
 
 void
-Report::process_template_set(Context &context, ipx_ipfix_set *set)
+Report::process_template_set(context_s &context, ipx_ipfix_set *set, int set_id)
 {
     fds_tset_iter it;
     fds_tset_iter_init(&it, set->ptr);
-    int res;
-    while ((res = fds_tset_iter_next(&it)) == FDS_OK) {
-        if (it.field_cnt > 0 && it.scope_cnt == 0) {
-            // Template Record
-            process_template_record(context, &it);
-        } else if (it.field_cnt > 0 && it.scope_cnt > 0) {
-            // Options Template Record
-
-        } else if (it.field_cnt == 0) {
-            // Template Withdrawal Record
+    int rc;
+    while ((rc = fds_tset_iter_next(&it)) == FDS_OK) {
+        if (it.field_cnt == 0) {
+            // Template withdrawal record
+            withdraw_template(context, it.ptr.wdrl_trec, set_id);
+        } else {
+            // Template or options template record
+            parse_and_process_template(context, &it);
         }
     }
-    if (res == FDS_ERR_FORMAT) {
+    if (rc == FDS_ERR_FORMAT) {
         throw std::runtime_error(
             std::string("iterating over template set failed - ") + fds_tset_iter_err(&it));
-    } else if (res != FDS_EOC) {
+    } else if (rc != FDS_EOC) {
         throw std::runtime_error("iterating over template set failed - unknown return code");
     }
 }
 
 void
-Report::process_template_record(Context &context, fds_tset_iter *it)
+Report::withdraw_template(context_s &context, const fds_ipfix_wdrl_trec *trec, int set_id)
+{
+    int t_id = trec->template_id;
+    if (t_id >= FDS_IPFIX_SET_MIN_DSET) {
+        // Withdraw single template with corresponding type
+        template_s *template_ = find_template(context, t_id);
+        if (template_ != nullptr) {
+            add_template(context, nullptr, nullptr);
+        } else {
+            // Trying to withdraw nonexistent template id
+        }
+    } else if (t_id == FDS_IPFIX_SET_TMPLT || t_id == FDS_IPFIX_SET_OPTS_TMPLT) {
+        // Withdraw all data or option templates
+        for (template_s &template_ : context.templates) {
+            if (template_.data.tmplt != nullptr && template_.data.tmplt->type == set_id) {
+                add_template(context, nullptr, &template_);
+            }
+        }
+    } else {
+        assert(false && "invalid template id");
+    }
+}
+
+void
+Report::parse_and_process_template(context_s &context, const fds_tset_iter *it)
 {
     uint16_t t_size = it->size;
     fds_template *tmplt;
-    int res = fds_template_parse(FDS_TYPE_TEMPLATE, it->ptr.trec, &t_size, &tmplt);
-    if (res != FDS_OK) {
+    int rc;
+    if (it->field_cnt > 0 && it->scope_cnt == 0) {
+        rc = fds_template_parse(FDS_TYPE_TEMPLATE, it->ptr.trec, &t_size, &tmplt);
+    } else if (it->field_cnt > 0 && it->scope_cnt > 0) {
+        rc = fds_template_parse(FDS_TYPE_TEMPLATE_OPTS, it->ptr.opts_trec, &t_size, &tmplt);
+    }
+    if (rc != FDS_OK) {
         throw std::runtime_error("parsing template failed");
     }
-    std::cout << "Parsed template " << tmplt << "\n";
-    Template *template_ = template_find(context, tmplt->id);
+
+    template_s *template_ = find_template(context, tmplt->id);
     if (template_ == nullptr) {
+        // First template we see with the id
         fds_template_ies_define(tmplt, iemgr, false);
-        template_ = &template_new(context);
-        template_->template_id = tmplt->id;
-        template_->data.tmplt = tmplt;
-        template_->data.first_seen = std::time(nullptr);
-        template_->data.last_seen = template_->data.first_seen;
+        template_ = &add_template(context, tmplt, nullptr);
+        check_undef_fields(tmplt);
+
     } else {
+        std::time_t prev_last_seen = template_->data.last_seen;
         template_->data.last_seen = std::time(nullptr);
-        if (fds_template_cmp(template_->data.tmplt, tmplt) != 0) {
+        if (fds_template_cmp(template_->data.tmplt.get(), tmplt) != 0) {
+            // New template with the same id
             fds_template_ies_define(tmplt, iemgr, false);
-            template_->history.push_back(template_->data);
-            template_->data = {};
-            template_->data.tmplt = tmplt;
-            template_->data.first_seen = std::time(nullptr);
-            template_->data.last_seen = template_->data.first_seen;
+            template_ = &add_template(context, tmplt, template_);
+            check_undef_fields(tmplt);
+
         } else {
+            // Same template we already have
+            context.refresh_time_histo(template_->data.last_seen - prev_last_seen);
             fds_template_destroy(tmplt);
         }
     }
 }
 
-void
-Report::process_data_set(Context &context, ipx_ipfix_set *set)
+template_s &
+Report::add_template(context_s &context, fds_template *tmplt, template_s *template_)
 {
-    std::cout << "Found data set\n";
-
-    int set_id = ntohs(set->ptr->flowset_id);
-    Template *template_ = template_find(context, set_id);
-    if (template_ != nullptr) {
-        std::cout << "Found template for data set " << template_ << "\n";
-
-        fds_dset_iter it;
-        fds_dset_iter_init(&it, set->ptr, template_->data.tmplt);
-        int res;
-        while ((res = fds_dset_iter_next(&it)) == FDS_OK) {
-            template_->data.used_cnt++;
-            template_->data.last_used = std::time(nullptr);
-        }
-        if (res == FDS_ERR_FORMAT) {
-            throw std::runtime_error(
-                std::string("iterating over data set failed - ") + fds_dset_iter_err(&it));
-        } else if (res != FDS_EOC) {
-            throw std::runtime_error("iterating over data set failed - unknown return code");
-        }
-
+    if (template_ == nullptr) {
+        // New template
+        context.templates.emplace_back();
+        template_ = &context.templates.back();
     } else {
-        std::cout << "Template with id " << set_id << " is missing to parse data set";
+        // Template is being replaced by template with same id
+        template_->history.push_back(std::move(template_->data));
+        template_->data = {};
+    }
+
+    template_->template_id = tmplt->id;
+    template_->data.tmplt = unique_ptr_fds_template(tmplt);
+    template_->data.first_seen = std::time(nullptr);
+    template_->data.last_seen = template_->data.first_seen;
+    return *template_;
+}
+
+template_s *
+Report::find_template(context_s &context, int template_id)
+{
+    for (template_s &template_ : context.templates) {
+        if (template_.template_id == template_id) {
+            return &template_;
+        }
+    }
+    return nullptr;
+}
+
+void
+Report::check_undef_fields(const fds_template *tmplt)
+{
+    for (int i = 0; i < tmplt->fields_cnt_total; i++) {
+        fds_tfield field = tmplt->fields[i];
+        if (field.def != nullptr) {
+            continue;
+        }
+        auto it = std::find_if(missing_defs.begin(), missing_defs.end(),
+            [&](fds_tfield &f) { return field.id == f.id && field.en == f.en; });
+        if (it != missing_defs.end()) {
+            // Already in the list
+            continue;
+        }
+        missing_defs.push_back(field);
     }
 }
 
 void
-Report::process_data_record(Context &context, fds_drec *drec)
+Report::process_data_set(context_s &context, ipx_ipfix_set *set, int set_id)
+{
+    template_s *template_ = find_template(context, set_id);
+    if (template_ != nullptr && template_->data.tmplt != nullptr) {
+        // Template for data set is missing or was withdrawn
+        return;
+    }
+    template_->data.last_used = std::time(nullptr);
+    // Iterate over data set records
+    fds_dset_iter it;
+    fds_dset_iter_init(&it, set->ptr, template_->data.tmplt.get());
+    int rc;
+    while ((rc = fds_dset_iter_next(&it)) == FDS_OK) {
+        template_->data.used_cnt++;
+    }
+    if (rc == FDS_ERR_FORMAT) {
+        throw std::runtime_error(
+            std::string("iterating over data set failed - ") + fds_dset_iter_err(&it));
+    } else if (rc != FDS_EOC) {
+        throw std::runtime_error("iterating over data set failed - unknown return code");
+    }
+}
+
+void
+Report::process_data_record(context_s &context, fds_drec *drec)
 {
     fds_drec_iter it;
     fds_drec_iter_init(&it, drec, 0);
-    int res;
-    while ((res = fds_drec_iter_next(&it)) != FDS_EOC) {
-        fds_tfield finfo = *it.field.info;
-        if (finfo.en == PEN_IANA || finfo.en == PEN_IANA_REV) {
-            if (finfo.id >= ID_FlowStartSeconds && finfo.id <= ID_FlowEndNanoseconds) {
-                process_timestamps(context, &it.field);
+    int rc;
+    while ((rc = fds_drec_iter_next(&it)) != FDS_EOC) {
+        fds_tfield info = *it.field.info;
+        if (info.en == PEN_IANA || info.en == PEN_IANA_REV) {
+            if (info.id >= ID_FlowStartSeconds && info.id <= ID_FlowEndNanoseconds) {
+                check_timestamps(context, &it.field);
             }
         }
     }
 }
 
 void
-Report::process_timestamps(Context &context, fds_drec_field *field)
+Report::check_timestamps(context_s &context, fds_drec_field *field)
 {
     fds_iemgr_element_type elem_type;
     switch (field->info->id) {
@@ -340,8 +309,8 @@ Report::process_timestamps(Context &context, fds_drec_field *field)
     }
 
     uint64_t ts_value;
-    int res = fds_get_datetime_lp_be(field->data, field->size, elem_type, &ts_value);
-    if (res != FDS_OK) {
+    int rc = fds_get_datetime_lp_be(field->data, field->size, elem_type, &ts_value);
+    if (rc != FDS_OK) {
         throw std::runtime_error("timestamp conversion failed");
     }
 
@@ -349,5 +318,5 @@ Report::process_timestamps(Context &context, fds_drec_field *field)
     int ts_now = std::time(nullptr);
     int ts_diff = ts_value - ts_now;
 
-    histogram_record(context.flow_time_hgram, ts_diff);
+    context.flow_time_histo(ts_diff);
 }

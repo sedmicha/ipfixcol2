@@ -2,6 +2,7 @@
 #include <sstream>
 #include <string>
 #include "report.hpp"
+#include "histogram.hpp"
 
 struct Output {
     Report &report;
@@ -22,34 +23,18 @@ struct Output {
     or_(const char *a, const char *b);
 
     void
-    print_hgram_time(int value);
-
-    void
-    process_histogram(Histogram &hgram);
-
-    void
-    process_template_fields(fds_template *tmplt);
-
-    void
-    process_template_data(Template::Data t_data);
-
-    void
-    process_template(Template &template_);
-
-    void
-    process_context(Context &context);
-
-    void
-    process_session_net(ipx_session_net *net);
-
-    void
-    process_session(Session &session);
-
-    void
-    process_report(Report &report);
-
-    void
     generate();
+
+    void
+    write_session(const session_s &session);
+    void
+    write_context(const context_s &context, const session_s &session);
+    void
+    write_histogram(const Histogram &histogram);
+    void
+    write_template(const template_s &template_);
+    void
+    write_template_data(const template_s::data_s &data, int template_id);
 
     void
     save_to_file(std::string filename);

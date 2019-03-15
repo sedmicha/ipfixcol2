@@ -2,96 +2,87 @@
 #include <ipfixcol2.h>
 #include <vector>
 #include <ctime>
+#include <memory>
+#include <string>
 #include "config.hpp"
+#include "histogram.hpp"
+#include "utils.hpp"
 
-struct Histogram {
-    int bin_size;
-    int bin_cnt;
-    int offset;
-    std::vector<int> bins;
-};
-
-struct Template {
-    int template_id;
-    struct Data {
-        fds_template *tmplt;
-        int used_cnt;
-        std::time_t first_seen;
-        std::time_t last_seen;
-        std::time_t last_used;
+struct template_s {
+    int template_id = 0;
+    struct data_s {
+        unique_ptr_fds_template tmplt = nullptr;
+        int used_cnt = 0;
+        std::time_t first_seen = 0;
+        std::time_t last_seen = 0;
+        std::time_t last_used = 0;
     };
-    Template::Data data;
-    std::vector<Template::Data> history;
+    template_s::data_s data = {};
+    std::vector<template_s::data_s> history;
 };
 
-struct Context {
-    ipx_msg_ctx ipx_ctx_;
-    std::vector<Template> templates;
-    std::time_t first_seen;
-    std::time_t last_seen;
-    Histogram flow_time_hgram;
+struct context_s {
+    ipx_msg_ctx ipx_ctx_ = {};
+    std::vector<template_s> templates;
+    std::time_t first_seen = 0;
+    std::time_t last_seen = 0;
+    Histogram flow_time_histo;
+    Histogram refresh_time_histo;
 };
 
-struct Session {
-    ipx_session *ipx_session_;
-    std::vector<Context> contexts;
-    std::time_t time_opened;
-    std::time_t time_closed;
-    bool is_opened;
+struct session_s {
+    unique_ptr_ipx_session ipx_session_ = nullptr;
+    std::vector<context_s> contexts;
+    std::time_t time_opened = 0;
+    std::time_t time_closed = 0;
+    bool is_opened = false;
+    std::string hostname;
 };
 
 struct Report {
     fds_iemgr *iemgr;
-    std::vector<Session> sessions;
     Config &config;
+    std::vector<session_s> sessions;
+    std::vector<fds_tfield> missing_defs;
 
     Report(Config &config, fds_iemgr *iemgr);
-    ~Report();
-
-    Session &
-    session_new(const ipx_session *ipx_session_);
-    Session &
-    session_get(const ipx_session *ipx_session_);
-    void
-    session_destroy(Session &session);
-
-    Context &
-    context_new(Session &session, ipx_msg_ctx ipx_ctx_);
-    Context *
-    context_find(Session &session, ipx_msg_ctx ipx_ctx_);
-    Context &
-    context_get(Session &session, ipx_msg_ctx ipx_ctx_);
-    void
-    context_destroy(Context &context_);
-
-    Template &
-    template_new(Context &context);
-    Template *
-    template_find(Context &context, int template_id);
-    Template &
-    template_get(Context &context, int template_id);
-    void
-    template_destroy(Template &template_);
-
-    void
-    histogram_init(Histogram &histogram, int bin_size, int bin_cnt, int offset);
-    void
-    histogram_record(Histogram &histogram, int value);
-    int
-    histogram_idx_value(Histogram &histogram, int index);
 
     void
     process_session_msg(ipx_msg_session *msg);
+
+    session_s &
+    get_session(const ipx_session *ipx_session_);
+
     void
     process_ipfix_msg(ipx_msg_ipfix *msg);
+
+    context_s &
+    get_or_create_context(session_s &session, const ipx_msg_ctx *ipx_ctx_);
+
     void
-    process_template_set(Context &context, ipx_ipfix_set *set);
+    process_template_set(context_s &context, ipx_ipfix_set *set, int set_id);
+
     void
-    process_template_record(Context &context, fds_tset_iter *it);
+    withdraw_template(context_s &context, const fds_ipfix_wdrl_trec *trec, int set_id);
+
     void
-    process_data_set(Context &context, ipx_ipfix_set *set);
+    parse_and_process_template(context_s &context, const fds_tset_iter *it);
+
+    template_s &
+    add_template(context_s &context, fds_template *tmplt, template_s *template_);
+
+    template_s *
+    find_template(context_s &context, int template_id);
+
     void
-    process_data_record(Context &context, fds_drec *drec);
+    check_undef_fields(const fds_template *tmplt);
+
     void
-    process_timestamps(Context &context, fds_drec_field *field);
+    process_data_set(context_s &context, ipx_ipfix_set *set, int set_id);
+
+    void
+    process_data_record(context_s &context, fds_drec *drec);
+
+    void
+    check_timestamps(context_s &context, fds_drec_field *field);
 };

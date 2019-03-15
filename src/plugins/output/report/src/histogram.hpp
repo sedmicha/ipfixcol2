@@ -35,15 +35,15 @@ struct Histogram {
         }
     }
 
-    value_s operator[](int index)
+    value_s operator[](int index) const
     {
         if (index == 0) {
-            return {INT_MIN, from - 1, counts[0]};
+            return {INT_MIN, from, counts[0]};
         } else if (index == length - 1) {
             return {to, INT_MAX, counts[length - 1]};
         } else {
             int x = (index - 1) * bin_width + from;
-            return {x, x + bin_width - 1, counts[index]};
+            return {x, x + bin_width, counts[index]};
         }
     }
 };
