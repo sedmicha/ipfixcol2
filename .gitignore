@@ -7,6 +7,9 @@ cmake-build-release/
 # JetBrains files
 .idea/
 
+# VS Code files
+.vscode/
+
 # Prerequisites
 *.d
 
@@ -68,3 +71,4 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
