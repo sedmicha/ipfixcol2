@@ -1,7 +1,50 @@
+/**
+ * \file src/plugins/output/report/src/report.cpp
+ * \author Michal Sedlak <xsedla0v@stud.fit.vutbr.cz>
+ * \brief Processes incoming data and creates stats about them for report output plugin
+ * \date 2019
+ */
+
+/* Copyright (C) 2019 CESNET, z.s.p.o.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in
+ *    the documentation and/or other materials provided with the
+ *    distribution.
+ * 3. Neither the name of the Company nor the names of its contributors
+ *    may be used to endorse or promote products derived from this
+ *    software without specific prior written permission.
+ *
+ * ALTERNATIVELY, provided that this notice is retained in full, this
+ * product may be distributed under the terms of the GNU General Public
+ * License (GPL) version 2 or later, in which case the provisions
+ * of the GPL apply INSTEAD OF those given above.
+ *
+ * This software is provided ``as is'', and any express or implied
+ * warranties, including, but not limited to, the implied warranties of
+ * merchantability and fitness for a particular purpose are disclaimed.
+ * In no event shall the company or contributors be liable for any
+ * direct, indirect, incidental, special, exemplary, or consequential
+ * damages (including, but not limited to, procurement of substitute
+ * goods or services; loss of use, data, or profits; or business
+ * interruption) however caused and on any theory of liability, whether
+ * in contract, strict liability, or tort (including negligence or
+ * otherwise) arising in any way out of the use of this software, even
+ * if advised of the possibility of such damage.
+ *
+ */
+
 #include "report.hpp"
-#include <libfds.h>
+
 #include <iostream>
 #include <algorithm>
+
+#include <libfds.h>
 
 constexpr uint16_t PEN_IANA = 0;
 constexpr uint16_t PEN_IANA_REV = 29305;
@@ -14,8 +57,18 @@ constexpr uint16_t ID_FlowEndMicroseconds = 155U;
 constexpr uint16_t ID_FlowStartNanoseconds = 156U;
 constexpr uint16_t ID_FlowEndNanoseconds = 157U;
 
-Report::Report(Config &config, fds_iemgr *iemgr) : config(config), iemgr(iemgr) {}
+Report::Report(Config &config, fds_iemgr *iemgr) : iemgr(iemgr), config(config) {}
 
+/**
+ * \brief Process session message from plugin handler
+ * 
+ * This function gets called directly from the plugin handler. 
+ * It handles opening and closing of sessions according to the session event received 
+ * in the session message.
+ *
+ * \param[in] msg The IPX Session message
+ * \throw runtime_error
+ */
 void
 Report::process_session_msg(ipx_msg_session *msg)
 {
@@ -28,11 +81,10 @@ Report::process_session_msg(ipx_msg_session *msg)
         session_s &session = sessions.back();
         session.ipx_session_ = unique_ptr_ipx_session(copy_ipx_session(ipx_session_));
         if (session.ipx_session_ == nullptr) {
-            throw std::runtime_error("copying ipx_session failed");
+            throw std::runtime_error("Copying ipx_session failed");
         }
         session.time_opened = std::time(nullptr);
         session.is_opened = true;
-        session.hostname = get_hostname(ipx_session_);
 
     } else if (event == IPX_MSG_SESSION_CLOSE) {
         // Close existing session
@@ -45,6 +97,11 @@ Report::process_session_msg(ipx_msg_session *msg)
     }
 }
 
+/**
+ * \brief Finds and returns session struct corresponding to the ipx_session passed
+ *
+ * \param[in] ipx_session_ The ipx_session of the session struct to find
+ */
 session_s &
 Report::get_session(const ipx_session *ipx_session_)
 {
@@ -65,13 +122,26 @@ Report::process_ipfix_msg(ipx_msg_ipfix *msg)
     session_s &session = get_session(ipx_ctx_->session);
     context_s &context = get_or_create_context(session, ipx_ctx_);
 
+    // Keep track of highest and lowest sequence number to determine number of data records lost
+    fds_ipfix_msg_hdr *hdr = reinterpret_cast<fds_ipfix_msg_hdr *>(ipx_msg_ipfix_get_packet(msg));
+    unsigned int seq_num = ntohl(hdr->seq_num);
+    if (seq_num < context.seq_num_lowest) {
+        context.seq_num_lowest = seq_num;
+    }
+    if (seq_num > context.seq_num_highest) {
+        context.seq_num_highest = seq_num;
+    }
+
     // Iterate over sets
     struct ipx_ipfix_set *sets;
     size_t set_cnt;
     ipx_msg_ipfix_get_sets(msg, &sets, &set_cnt);
-    for (int i = 0; i < set_cnt; i++) {
+    for (size_t i = 0; i < set_cnt; i++) {
         int set_id = ntohs(sets[i].ptr->flowset_id);
         if (set_id == FDS_IPFIX_SET_TMPLT || set_id == FDS_IPFIX_SET_OPTS_TMPLT) {
+            std::time_t prev_refresh = context.template_refresh.last;
+            context.template_refresh.last = std::time_t(nullptr);
+            context.template_refresh.interval = context.template_refresh.last - prev_refresh;
             process_template_set(context, &sets[i], set_id);
         } else if (set_id >= FDS_IPFIX_SET_MIN_DSET) {
             process_data_set(context, &sets[i], set_id);
@@ -104,7 +174,6 @@ Report::get_or_create_context(session_s &session, const ipx_msg_ctx *ipx_ctx_)
     context.ipx_ctx_ = copy_ipx_msg_ctx(*ipx_ctx_);
     context.ipx_ctx_.session = session.ipx_session_.get();
     context.flow_time_histo = Histogram(-600, 60, 30);
-    context.refresh_time_histo = Histogram(0, 1800, 60);
     return context;
 }
 
@@ -124,22 +193,22 @@ Report::process_template_set(context_s &context, ipx_ipfix_set *set, int set_id)
         }
     }
     if (rc == FDS_ERR_FORMAT) {
-        throw std::runtime_error(
-            std::string("iterating over template set failed - ") + fds_tset_iter_err(&it));
+        std::string err = fds_tset_iter_err(&it);
+        throw std::runtime_error("Iterating over template set failed: " + err);
     } else if (rc != FDS_EOC) {
-        throw std::runtime_error("iterating over template set failed - unknown return code");
+        throw std::runtime_error("Iterating over template set failed: Unknown return code");
     }
 }
 
 void
 Report::withdraw_template(context_s &context, const fds_ipfix_wdrl_trec *trec, int set_id)
 {
-    int t_id = trec->template_id;
+    int t_id = ntohs(trec->template_id);
     if (t_id >= FDS_IPFIX_SET_MIN_DSET) {
         // Withdraw single template with corresponding type
         template_s *template_ = find_template(context, t_id);
         if (template_ != nullptr) {
-            add_template(context, nullptr, nullptr);
+            add_template(context, nullptr, template_);
         } else {
             // Trying to withdraw nonexistent template id
         }
@@ -167,7 +236,7 @@ Report::parse_and_process_template(context_s &context, const fds_tset_iter *it)
         rc = fds_template_parse(FDS_TYPE_TEMPLATE_OPTS, it->ptr.opts_trec, &t_size, &tmplt);
     }
     if (rc != FDS_OK) {
-        throw std::runtime_error("parsing template failed");
+        throw std::runtime_error("Parsing template failed");
     }
 
     template_s *template_ = find_template(context, tmplt->id);
@@ -178,9 +247,9 @@ Report::parse_and_process_template(context_s &context, const fds_tset_iter *it)
         check_undef_fields(tmplt);
 
     } else {
-        std::time_t prev_last_seen = template_->data.last_seen;
         template_->data.last_seen = std::time(nullptr);
-        if (fds_template_cmp(template_->data.tmplt.get(), tmplt) != 0) {
+        if (template_->data.tmplt == nullptr
+            || fds_template_cmp(template_->data.tmplt.get(), tmplt) != 0) {
             // New template with the same id
             fds_template_ies_define(tmplt, iemgr, false);
             template_ = &add_template(context, tmplt, template_);
@@ -188,7 +257,6 @@ Report::parse_and_process_template(context_s &context, const fds_tset_iter *it)
 
         } else {
             // Same template we already have
-            context.refresh_time_histo(template_->data.last_seen - prev_last_seen);
             fds_template_destroy(tmplt);
         }
     }
@@ -197,17 +265,18 @@ Report::parse_and_process_template(context_s &context, const fds_tset_iter *it)
 template_s &
 Report::add_template(context_s &context, fds_template *tmplt, template_s *template_)
 {
+    assert(tmplt != nullptr || template_ != nullptr);
     if (template_ == nullptr) {
         // New template
         context.templates.emplace_back();
         template_ = &context.templates.back();
+        template_->template_id = (tmplt != nullptr ? tmplt->id : 0);
     } else {
         // Template is being replaced by template with same id
         template_->history.push_back(std::move(template_->data));
         template_->data = {};
     }
 
-    template_->template_id = tmplt->id;
     template_->data.tmplt = unique_ptr_fds_template(tmplt);
     template_->data.first_seen = std::time(nullptr);
     template_->data.last_seen = template_->data.first_seen;
@@ -247,23 +316,27 @@ void
 Report::process_data_set(context_s &context, ipx_ipfix_set *set, int set_id)
 {
     template_s *template_ = find_template(context, set_id);
-    if (template_ != nullptr && template_->data.tmplt != nullptr) {
+    if (template_ == nullptr || template_->data.tmplt == nullptr) {
         // Template for data set is missing or was withdrawn
         return;
     }
     template_->data.last_used = std::time(nullptr);
+
     // Iterate over data set records
     fds_dset_iter it;
     fds_dset_iter_init(&it, set->ptr, template_->data.tmplt.get());
     int rc;
+    context.data_rec_last_total = context.data_rec_total;
     while ((rc = fds_dset_iter_next(&it)) == FDS_OK) {
         template_->data.used_cnt++;
+        context.data_rec_total++;
     }
+
     if (rc == FDS_ERR_FORMAT) {
-        throw std::runtime_error(
-            std::string("iterating over data set failed - ") + fds_dset_iter_err(&it));
+        std::string err = fds_dset_iter_err(&it);
+        throw std::runtime_error("Iterating over data set failed: " + err);
     } else if (rc != FDS_EOC) {
-        throw std::runtime_error("iterating over data set failed - unknown return code");
+        throw std::runtime_error("Iterating over data set failed: Unknown return code");
     }
 }
 
@@ -311,7 +384,7 @@ Report::check_timestamps(context_s &context, fds_drec_field *field)
     uint64_t ts_value;
     int rc = fds_get_datetime_lp_be(field->data, field->size, elem_type, &ts_value);
     if (rc != FDS_OK) {
-        throw std::runtime_error("timestamp conversion failed");
+        throw std::runtime_error("Timestamp conversion failed");
     }
 
     ts_value /= 1000;
@@ -320,3 +393,4 @@ Report::check_timestamps(context_s &context, fds_drec_field *field)
 
     context.flow_time_histo(ts_diff);
 }
+

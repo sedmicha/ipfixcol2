@@ -1,13 +1,15 @@
 # Create a linkable module
 add_library(report-output MODULE
-    src/plugin.cpp
-    src/report.cpp
-    src/report.hpp
-    src/utils.hpp
-    src/utils.cpp
-    src/histogram.hpp
-    src/output.hpp
-    src/output.cpp
+        src/plugin.cpp
+        src/report.cpp
+        src/report.hpp
+        src/utils.hpp
+        src/utils.cpp
+        src/histogram.hpp
+        src/output.hpp
+        src/output.cpp
+        src/config.cpp
+        src/config.hpp
 )
 
 install(

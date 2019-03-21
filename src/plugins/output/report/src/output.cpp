@@ -1,9 +1,52 @@
+/**
+ * \file src/plugins/output/report/src/output.hpp
+ * \author Michal Sedlak <xsedla0v@stud.fit.vutbr.cz>
+ * \brief HTML output generator file for report output plugin
+ * \date 2019
+ */
+
+/* Copyright (C) 2019 CESNET, z.s.p.o.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in
+ *    the documentation and/or other materials provided with the
+ *    distribution.
+ * 3. Neither the name of the Company nor the names of its contributors
+ *    may be used to endorse or promote products derived from this
+ *    software without specific prior written permission.
+ *
+ * ALTERNATIVELY, provided that this notice is retained in full, this
+ * product may be distributed under the terms of the GNU General Public
+ * License (GPL) version 2 or later, in which case the provisions
+ * of the GPL apply INSTEAD OF those given above.
+ *
+ * This software is provided ``as is'', and any express or implied
+ * warranties, including, but not limited to, the implied warranties of
+ * merchantability and fitness for a particular purpose are disclaimed.
+ * In no event shall the company or contributors be liable for any
+ * direct, indirect, incidental, special, exemplary, or consequential
+ * damages (including, but not limited to, procurement of substitute
+ * goods or services; loss of use, data, or profits; or business
+ * interruption) however caused and on any theory of liability, whether
+ * in contract, strict liability, or tort (including negligence or
+ * otherwise) arising in any way out of the use of this software, even
+ * if advised of the possibility of such damage.
+ *
+ */
+
 #include "output.hpp"
+
 #include <fstream>
-#include <iostream>
-#include <libfds.h>
 #include <vector>
 #include <algorithm>
+
+#include <libfds.h>
+#include "pen_table.h"
 
 std::string
 Output::time_to_str(std::time_t time, const char *format)
@@ -40,309 +83,430 @@ Output::Output(Report &report) : report(report) {}
 void
 Output::generate()
 {
-    ss << "<html>";
-    ss << "<head>";
-    ss << R"END(
+    s += "<!doctype html>";
+    s += "<html>";
+    s += "<head>";
+    s += R"END(
 <style>
     body {
         font-family: sans-serif;
+        background: #eee;
     }
-    .container, .session, .context, .template, .histogram {
-        border: 1px solid #aaa;
+    
+    main {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    .heading {
+        font-size: 20pt;
         padding: 10px;
-        border-radius: 3px;
-        margin: 10px;
+        padding-top: 15px;
+        background: lightgray;
     }
+    .heading-small {
+        font-size: 16pt;
+        padding: 10px;
+        background: white;
+    }
+    .content {
+        padding: 10px;
+        background: white;
+    }
+    .nested {
+        padding-left: 20px;
+        background: white;
+    }
+    .item {
+        margin-bottom: 20px;
+        border: 1px solid gray;
+        border-right: none;
+        background: white;
+    }
+    main > .item {
+        border-right: 1px solid gray;
+    }
+
+    .error {
+        color: red;
+        font-weight: bold;
+        padding: 10px;
+    }
+
+    .danger {
+        background: lightcoral;
+    }
+    
     table td {
         padding: 5px;
     }
+    
     .info td:first-child {
         color: gray;
     }
+    
     .info td:last-child {
-    	padding-left: 20px;
-     	font-weight: bold;
-    }
-    th {
-    	color: gray;
-    }
-    .heading {
-        color: gray;
-        font-size: 18pt;
-        padding-bottom: 10px;
-        padding-left: 5px;
-        padding-top: 10px;
-        display: inline-block;
-    }
-        .template-fields {
-    	border-collapse: collapse;
+        padding-left: 20px;
+        font-weight: bold;
     }
 
-    .template-fields td, .template-fields th {
-    	border-left: 1px solid gray;
-    	border-right: 1px solid gray;
+    .data-table {
+        border-collapse: collapse;
+        width: 100%;
     }
 
-    .template-fields th {
-    	border-bottom: 1px solid gray;
-
+    .data-table th {
+        background: lightgray;
     }
 
-    .template-fields td:first-child, .template-fields td:last-child, 
-    .template-fields th:first-child, .template-fields th:last-child {
-    	border-left: none;
-    	border-right: none;
-    }
-
-    .template-fields td, .template-fields th {
-    	padding-left: 15px;
-    	padding-right: 15px;
+    .data-table td, th {
+        border: 1px solid gray;
     }
 </style>
 )END";
-    ss << "</head>";
-    ss << "<body>";
-    ss << "<h1>ipfixcol2 report</h1>";
-    ss << "<div style='color:gray'>generated " << time_to_str(std::time(nullptr)) << "</div>";
+    s += "</head>";
+    s += "<body>";
+    s += "<main>";
+    s += "<div style='display: flex; flex-direction: row; justify-content: space-between; align-items: flex-end'>";
+    s += "<div style='font-size: 28pt'>ipfixcol2 report</div>";
+    s += "<div>generated " + time_to_str(std::time(nullptr)) + "</div>";
+    s += "</div>";
+    s += "<br>";
+
+    auto top_pos = s.size();
+    error_list.clear();
+
+    // Write missing defs is any
     if (!report.missing_defs.empty()) {
-        ss << "<div class='container'>";
-        ss << "<div class='heading'>Missing information element definitions</div>";
-        ss << "<table>";
-        ss << "<tr><th>Enterprise number</th><th>Information element ID</th></tr>";
+        s += "<div class='item'>";
+        s += "<details>";
+        s += "<summary class='heading-small danger'>Missing information element definitions (" + std::to_string(report.missing_defs.size()) + ")</summary>";
+        s += "<div class='content'>";
+        s += "<table class='data-table'>";
+        s += "<tr><th>ID</th><th>EN</th><th>Organization</th><th>Contact</th><th>Email</th></tr>";
         for (fds_tfield &field : report.missing_defs) {
-            ss << "<tr><td>" << field.en << "</td><td>" << field.id << "</td></tr>";
+            s += "<tr>";
+            if (field.en <= PEN_TABLE_MAX && pen_table[field.en].organization != nullptr) {
+                const pen_entry_s entry = pen_table[field.en];
+                s += "<td>" + std::to_string(field.id) + "</td>";
+                s += "<td>" + std::to_string(field.en) + "</td>";
+                s += "<td>" + std::string(entry.organization) + "</td>";
+                s += "<td>" + std::string(entry.contact) + "</td>";
+                s += "<td>" + std::string(entry.email) + "</td>";
+            } else {
+                s += "<td>" + std::to_string(field.id) + "</td>";
+                s += "<td>" + std::to_string(field.en) + "</td>";
+                s += "<td><i>&lt;unknown&gt;</i></td>";
+                s += "<td><i>&lt;unknown&gt;</i></td>";
+                s += "<td><i>&lt;unknown&gt;</i></td>";
+            }
+            s += "</tr>";
         }
-        ss << "</table>";
-        ss << "</div>";
+        s += "</table>";
+        s += "</div>";
+        s += "</details>";
+        s += "</div>";
     }
+
+    s += "<br>";
+    session_id = 0;
     for (session_s &session : report.sessions) {
+        session_id++;
         write_session(session);
     }
-    ss << "</body>";
-    ss << "</html>";
+    
+    // Write out error list
+    if (!error_list.empty()) {
+        std::string ss;
+        ss += "<div class='item'>";
+        ss += "<div class='heading-small danger'>";
+        ss += "Errors (" + std::to_string(error_list.size()) + ")";
+        ss += "</div>";
+        ss += "<div class='content'>";
+        for (std::string &error : error_list) {
+            ss += error;
+        }
+        ss += "</div>";
+        ss += "</div>";
+        s.insert(top_pos, ss);
+    }
+
+    s += "</main>";
+
+    s += R"END(
+<script type='text/javascript'>
+function expandDetails(elem) {
+    elem = elem.parentNode;
+    while (elem) {
+        if (elem.tagName == 'DETAILS') {
+            elem.open = true;
+        }
+        elem = elem.parentNode;
+    }
+}
+
+var elems = document.getElementsByTagName('a');
+for (var i = 0; i < elems.length; i++) {
+    var elem = elems[i];
+    elem.addEventListener('click', function(e) {
+        var href = e.target.getAttribute('href');
+        if (href.startsWith('#')) {
+            var target = document.getElementById(href.substring(1));
+            expandDetails(target);
+        }
+    });
+}
+</script>
+)END";
+    s += "</body>";
+    s += "</html>";
 }
 
 void
 Output::write_session(const session_s &session)
 {
-    // Session header
-    ss << "<div class='session'>";
-    ss << "<div class='heading'>Session info</div>";
-    ss << "<table class='info'>";
-    ss << "<tr><td>Session opened</td><td>" << time_to_str(session.time_opened) << "</td></tr>";
-    ss << "<tr><td>Session closed</td><td>" << time_to_str(session.time_closed) << "</td></tr>";
+    // Session info
+    s += "<div class='item'>";
+    s += "<a id='session-" + std::to_string(session_id) + "'></a>";
+    s += "<div class='heading'>Session #" + std::to_string(session_id) + "</div>";
+    s += "<div class='content'>";
+    s += "<table class='info'>";
+    s += "<tr><td>Session opened</td><td>" + time_to_str(session.time_opened) + "</td></tr>";
+    s += "<tr><td>Session closed</td><td>" + time_to_str(session.time_closed) + "</td></tr>";
     auto write_session_net = [&](const ipx_session_net *net) {
-        ss << "<tr><td>Hostname</td><td>" << (!session.hostname.empty() ? session.hostname : "N/A")
-           << "</td></tr>";
+        std::string hostname = get_hostname(net);
+        s += "<tr><td>Hostname</td><td>" + (!hostname.empty() ? hostname : "<i>unknown</i>") + "</td></tr>";
         if (net->l3_proto == AF_INET) {
-            ss << "<tr><td>Source address</td><td>" << ip_to_str(net->addr_src.ipv4)
-               << "</td></tr>";
-            ss << "<tr><td>Source port</td><td>" << net->port_src << "</td></tr>";
-            ss << "<tr><td>Destination address</td><td>" << ip_to_str(net->addr_dst.ipv4)
-               << "</td></tr>";
-            ss << "<tr><td>Destination port</td><td>" << net->port_dst << "</td></tr>";
+            s += "<tr><td>Source address</td><td>" + ip_to_str(net->addr_src.ipv4) + "</td></tr>";
+            s += "<tr><td>Source port</td><td>" + std::to_string(net->port_src) + "</td></tr>";
+            s += "<tr><td>Destination address</td><td>" + ip_to_str(net->addr_dst.ipv4)
+                + "</td></tr>";
+            s += "<tr><td>Destination port</td><td>" + std::to_string(net->port_dst) + "</td></tr>";
         } else {
-            ss << "<tr><td>Source address</td><td>" << ip_to_str(net->addr_src.ipv6)
-               << "</td></tr>";
-            ss << "<tr><td>Source port</td><td>" << net->port_src << "</td></tr>";
-            ss << "<tr><td>Destination address</td><td>" << ip_to_str(net->addr_dst.ipv6)
-               << "</td></tr>";
-            ss << "<tr><td>Destination port</td><td>" << net->port_dst << "</td></tr>";
+            s += "<tr><td>Source address</td><td>" + ip_to_str(net->addr_src.ipv6) + "</td></tr>";
+            s += "<tr><td>Source port</td><td>" + std::to_string(net->port_src) + "</td></tr>";
+            s += "<tr><td>Destination address</td><td>" + ip_to_str(net->addr_dst.ipv6)
+                + "</td></tr>";
+            s += "<tr><td>Destination port</td><td>" + std::to_string(net->port_dst) + "</td></tr>";
         }
     };
     switch (session.ipx_session_->type) {
     case FDS_SESSION_TCP:
-        ss << "<tr><td>Protocol</td><td>TCP</td></tr>";
+        s += "<tr><td>Protocol</td><td>TCP</td></tr>";
         write_session_net(&session.ipx_session_->tcp.net);
         break;
     case FDS_SESSION_UDP:
-        ss << "<tr><td>Protocol</td><td>UDP</td></tr>";
+        s += "<tr><td>Protocol</td><td>UDP</td></tr>";
         write_session_net(&session.ipx_session_->udp.net);
         break;
     case FDS_SESSION_SCTP:
-        ss << "<tr><td>Protocol</td><td>SCTP</td></tr>";
+        s += "<tr><td>Protocol</td><td>SCTP</td></tr>";
         write_session_net(&session.ipx_session_->sctp.net);
         break;
     case FDS_SESSION_FILE:
-        ss << "<tr><td>Protocol</td><td>File</td></tr>";
-        ss << "<tr><td>Filename</td><td>" << session.ipx_session_->file.file_path << "</td></tr>";
+        s += "<tr><td>Protocol</td><td>File</td></tr>";
+        s += "<tr><td>Filename</td><td>" + std::string(session.ipx_session_->file.file_path)
+            + "</td></tr>";
         break;
     }
-    ss << "</table>";
-    // Session body
-    ss << "<details>";
-    ss << "<summary><div class='heading'>Contexts (" << session.contexts.size()
-       << ")</span></summary>";
+    s += "</table>";
+    s += "</div>";
+    // Session contexts
+    s += "<details>";
+    s += "<summary class='heading-small'>Contexts (" + std::to_string(session.contexts.size())
+        + ")</summary>";
+    s += "<div class='nested'>";
+    context_id = 0;
     for (const context_s &context : session.contexts) {
+        context_id++;
         write_context(context, session);
     }
-    ss << "</div>";
+    s += "</div>";
+    s += "</details>";
+
+    s += "</div>";
 }
 void
 Output::write_context(const context_s &context, const session_s &session)
 {
-    ss << "<div class='context'>";
     // Context header
-    ss << "<div class='heading'>Context info</div>";
-    ss << "<table class='info'>";
-    ss << "<tr><td>ODID</td><td>" << context.ipx_ctx_.odid << "</td></tr>";
+    s += "<div class='item'>";
+    s += "<a id='session-" + std::to_string(session_id) + "-context-" + std::to_string(context_id)
+        + "'></a>";
+    s += "<div class='heading'>Context #" + std::to_string(context_id) + "</div>";
+    s += "<div class='content'>";
+    s += "<table class='info'>";
+    s += "<tr><td>ODID</td><td>" + std::to_string(context.ipx_ctx_.odid) + "</td></tr>";
     if (session.ipx_session_->type == FDS_SESSION_SCTP) {
-        ss << "<tr><td>Stream</td><td>" << context.ipx_ctx_.stream << "</td></tr>";
+        s += "<tr><td>Stream</td><td>" + std::to_string(context.ipx_ctx_.stream) + "</td></tr>";
     }
-    ss << "<tr><td>First seen</td><td>" << time_to_str(context.first_seen) << "</td></tr>";
-    ss << "<tr><td>Last seen</td><td>" << time_to_str(context.last_seen) << "</td></tr>";
-    ss << "</table>";
+    s += "<tr><td>First seen</td><td>" + time_to_str(context.first_seen) + "</td></tr>";
+    s += "<tr><td>Last seen</td><td>" + time_to_str(context.last_seen) + "</td></tr>";
+
+    // Refresh time
+    if (session.ipx_session_->type == FDS_SESSION_UDP) {
+        s += "<tr><td>Template refresh interval</td><td>"
+            + (context.template_refresh.interval > 0
+                      ? time_to_str(context.template_refresh.interval, "%M min %S sec")
+                      : "unknown")
+            + "</td></tr>";
+    }
+
+    // Records lost and received
+    s += "<tr><td>Data records received</td><td>" + std::to_string(context.data_rec_total)
+        + "</td></tr>";
+
+    unsigned int seq_diff = (context.seq_num_highest - context.seq_num_lowest);
+    if (context.data_rec_last_total <= seq_diff) {
+        s += "<tr><td>Data records lost</td><td>" + std::to_string(seq_diff - context.data_rec_last_total) + "</td></tr>";
+    } else {
+        // FIXME: why does this happen?
+        s += "<tr><td>Data records lost</td><td>0</td></tr>";
+    }
+    s += "</table>";
 
     // Flow time histogram
-    ss << "<details>";
-    ss << "<summary>";
-    ss << "<div class='heading'>Flow time histogram</span>";
-    ss << "</summary>";
-    write_histogram(context.flow_time_histo);
-    ss << "</details>";
-
-    // Refresh time histogram
-    if (session.ipx_session_->type == FDS_SESSION_UDP) {
-        ss << "<details>";
-        ss << "<summary>";
-        ss << "<div class='heading'>Refresh time histogram</span>";
-        ss << "</summary>";
-        write_histogram(context.refresh_time_histo);
-        ss << "</details>";
+    // TODO: get rid of magic numbers
+    int count_older = 0;
+    int count_newer = 0;
+    for (int i = 0; i < context.flow_time_histo.length; i++) {
+        Histogram::value_s value = context.flow_time_histo[i];
+        if (value.to <= -600) {
+            count_older += value.count;
+        }
+        if (value.from >= 0) {
+            count_newer += value.count;
+        }
     }
 
+    if (count_older > 0) {
+        s += "<div class='error'>Timestamps older than 10 minutes found</div>";
+        error_list.push_back("<div class='error'>Timestamps older than 10 minutes found in <a href='#session-"
+            + std::to_string(session_id) + "-context-" + std::to_string(context_id) + "'>[Session #"
+            + std::to_string(session_id) + ", Context #" + std::to_string(context_id)
+            + "]</a></div>");
+    }
+    if (count_newer > 0) {
+        s += "<div class='error'>Timestamps newer than current time found</div>";
+        error_list.push_back("<div class='error'>Timestamps newer than 10 minutes found in <a href='#session-"
+            + std::to_string(session_id) + "-context-" + std::to_string(context_id) + "'>[Session #"
+            + std::to_string(session_id) + " Context #" + std::to_string(context_id)
+            + "]</a></div>");
+    }
+
+    s += "</div>";
+
     // Templates
-    ss << "<details>";
-    ss << "<summary>";
-    ss << "<div class='heading'>Templates (" << context.templates.size() << ")</span>";
-    ss << "</summary>";
-    ss << "<div class='templates'>";
+    s += "<details>";
+    s += "<summary class='heading-small'>Templates (" + std::to_string(context.templates.size())
+        + ")</summary>";
+    s += "<div class='nested'>";
     for (const template_s &template_ : context.templates) {
         write_template(template_);
     }
-    ss << "</details>";
-    ss << "</div>";
-}
-
-void
-Output::write_histogram(const Histogram &histogram)
-{
-    ss << "<div class='histogram'>";
-    auto label = [&](int secs) {
-        return (secs >= 0 ? "" : "-")
-            + (secs >= 0 ? time_to_str(secs, "%M:%S") : time_to_str(-secs, "%M:%S"));
-    };
-    auto bar = [&](int value, int max) {
-        float width = (max > 0 ? float(value) / float(max) * 100 : 0);
-        ss << "<td width='100%' class='value'><div style='background:lightblue;width:" << width
-           << "%'>" << value << "</div></td>";
-    };
-    ss << "<table class='info' width='100%'>";
-    ss << "<tr><th>Time (mm:ss)</th><th>Count</th>";
-    int max = *std::max_element(histogram.counts.begin(), histogram.counts.end());
-    Histogram::value_s value = histogram[0];
-    ss << "<tr>";
-    ss << "<td class='label' nowrap>&lt; " << label(value.to) << "</td>";
-    bar(value.count, max);
-    ss << "</tr>";
-    for (int i = 1; value = histogram[i], i < histogram.length - 1; i++) {
-        ss << "<tr>";
-        ss << "<td class='label' nowrap>" << label(value.from) << " to " << label(value.to)
-           << "</td>";
-        bar(value.count, max);
-        ss << "</tr>";
-    }
-    ss << "<tr>";
-    ss << "<td class='label' nowrap>&gt; " << label(value.from) << "</td>";
-    bar(value.count, max);
-    ss << "</tr>";
-    ss << "</table>";
-    ss << "</div>";
+    s += "</div>";
+    s += "</details>";
+    s += "</div>";
 }
 
 void
 Output::write_template(const template_s &template_)
 {
-    ss << "<div class='template'>";
+    s += "<div class='item'>";
+    s += "<div class='heading'>Template ID " + std::to_string(template_.template_id) + "</div>";
     write_template_data(template_.data, template_.template_id);
     if (!template_.history.empty()) {
-        ss << "<summary><div class='heading'>Template history</span></summary>";
+        s += "<details>";
+        s += "<summary class='heading-small'>Template history</summary>";
+        s += "<div class='nested'>";
         for (const template_s::data_s &data : template_.history) {
-            ss << "<div class='template'>";
+            s += "<div class='item'>";
             write_template_data(data, template_.template_id);
-            ss << "</div>";
+            s += "</div>";
         }
-        ss << "</details>";
+        s += "</div>";
+        s += "</details>";
     }
-    ss << "</div>";
+    s += "</div>";
 }
 
 void
 Output::write_template_data(const template_s::data_s &data, int template_id)
 {
-    ss << "<div class='heading'>Template info</div>";
-    ss << "<table class='info'>";
-    ss << "<tr><td>Template ID</td><td>" << template_id << "</td></tr>";
-    ss << "<tr><td>First seen</td><td>" << time_to_str(data.first_seen) << "</td></tr>";
-    ss << "<tr><td>Last seen</td><td>"
-       << (data.last_seen > 0 ? time_to_str(data.last_seen) : "never") << "</td></tr>";
-    ss << "<tr><td>Last used</td><td>"
-       << (data.last_used > 0 ? time_to_str(data.last_used) : "never") << "</td></tr>";
-    ss << "<tr><td>Used count</td><td>" << data.used_cnt << "</td></tr>";
-    ss << "</table>";
+    s += "<div class='content'>";
+    s += "<table class='info'>";
+    s += "<tr><td>First seen</td><td>" + time_to_str(data.first_seen) + "</td></tr>";
+    s += "<tr><td>Last seen</td><td>" + (data.last_seen > 0 ? time_to_str(data.last_seen) : "never")
+        + "</td></tr>";
+    s += "<tr><td>Last used</td><td>" + (data.last_used > 0 ? time_to_str(data.last_used) : "never")
+        + "</td></tr>";
+    s += "<tr><td>Used count</td><td>" + std::to_string(data.used_cnt) + "</td></tr>";
+    s += "</table>";
+    s += "</div>";
 
-    ss << "<div class='heading'>Template fields</div>";
-    ss << "<table class='template-fields'>";
-    ss << "<tr>";
-    ss << "<th>ID</th>";
-    ss << "<th>Name</th>";
-    ss << "<th>Scope EDID</th>";
-    ss << "<th>Scope name</th>";
-    ss << "<th>Type</th>";
-    ss << "<th>Semantic</th>";
-    ss << "<th>Unit</th>";
-    ss << "<th>Length</th>";
-    ss << "</tr>";
+    if (data.tmplt == nullptr) {
+        s += "<div class='content'>";
+        s += "<b>&lt;template withdrawn&gt;</b>";
+        s += "</div>";
+        return;
+    }
+
+    s += "<div class='heading-small'>Template fields</div>";
+    s += "<div class='content'>";
+    s += "<table class='data-table'>";
+    s += "<tr>";
+    s += "<th>ID</th>";
+    s += "<th>Name</th>";
+    s += "<th>Scope EDID</th>";
+    s += "<th>Scope name</th>";
+    s += "<th>Type</th>";
+    s += "<th>Semantic</th>";
+    s += "<th>Unit</th>";
+    s += "<th>Length</th>";
+    s += "</tr>";
 
     for (int i = 0; i < data.tmplt->fields_cnt_total; i++) {
-        ss << "<tr>";
+        s += "<tr>";
         fds_tfield field = data.tmplt->fields[i];
         const fds_iemgr_elem *def = field.def;
         if (def != nullptr) {
-            ss << "<td>" << def->id << "</td>";
-            ss << "<td>" << def->name << "</td>";
+            s += "<td>" + std::to_string(def->id) + "</td>";
+            s += "<td>" + std::string(def->name) + "</td>";
+            s += "<td>" + std::to_string(field.en) + "</td>";
             if (def->scope != nullptr) {
-                ss << "<td>" << def->scope->pen << "</td>";
-                ss << "<td>" << def->scope->name << "</td>";
+                s += "<td>" + std::string(def->scope->name) + "</td>";
             } else {
-                ss << "<td></td>";
-                ss << "<td></td>";
+                s += "<td><i>&lt;undefined&gt;</i></td>";
             }
-            ss << "<td>" << or_(fds_iemgr_type2str(def->data_type), "") << "</td>";
-            ss << "<td>" << or_(fds_iemgr_semantic2str(def->data_semantic), "") << "</td>";
-            ss << "<td>" << or_(fds_iemgr_unit2str(def->data_unit), "") << "</td>";
+            s += "<td>" + std::string(or_(fds_iemgr_type2str(def->data_type), "<i>&lt;undefined&gt;</i>"))
+                + "</td>";
+            s += "<td>"
+                + std::string(or_(fds_iemgr_semantic2str(def->data_semantic), "<i>&lt;undefined&gt;</i>"))
+                + "</td>";
+            s += "<td>" + std::string(or_(fds_iemgr_unit2str(def->data_unit), "<i>&lt;undefined&gt;</i>"))
+                + "</td>";
             if (field.length != FDS_IPFIX_VAR_IE_LEN) {
-                ss << "<td>" << field.length << " B</td>";
+                s += "<td>" + std::to_string(field.length) + " B</td>";
             } else {
-                ss << "<td>variable</td>";
+                s += "<td>variable</td>";
             }
         } else {
-            ss << "<td>" << field.id << "</td>";
-            ss << "<td></td>";
-            ss << "<td></td>";
-            ss << "<td></td>";
-            ss << "<td></td>";
-            ss << "<td></td>";
-            ss << "<td></td>";
+            s += "<td>" + std::to_string(field.id) + "</td>";
+            s += "<td><i>&lt;undefined&gt;</i></td>";
+            s += "<td>" + std::to_string(field.en) + "</td>";
+            s += "<td><i>&lt;undefined&gt;</i></td>";
+            s += "<td><i>&lt;undefined&gt;</i></td>";
+            s += "<td><i>&lt;undefined&gt;</i></td>";
+            s += "<td><i>&lt;undefined&gt;</i></td>";
             if (field.length != FDS_IPFIX_VAR_IE_LEN) {
-                ss << "<td>" << field.length << " B</td>";
+                s += "<td>" + std::to_string(field.length) + " B</td>";
             } else {
-                ss << "<td>variable</td>";
+                s += "<td>variable</td>";
             }
         }
-        ss << "</tr>";
+        s += "</tr>";
     }
-    ss << "</table>";
+    s += "</table>";
+    s += "</div>";
 }
 
 void
@@ -350,6 +514,6 @@ Output::save_to_file(std::string filename)
 {
     std::ofstream of;
     of.open(filename);
-    of << ss.str();
+    of << s;
     of.close();
 }
