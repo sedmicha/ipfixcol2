@@ -2,3 +2,4 @@
 add_subdirectory(dummy)
 add_subdirectory(json)
 add_subdirectory(report)
+add_subdirectory(ipfix)
