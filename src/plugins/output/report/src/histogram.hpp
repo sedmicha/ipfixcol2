@@ -60,12 +60,22 @@ struct Histogram {
 
     Histogram() {}
 
+    /**
+     * \brief      Creates a histogram given an interval and the width of a bin.
+     *             
+     * \param[in]  from       The lower bound of the interval of values
+     * \param[in]  to         The upper bound of the interval of values
+     * \param[in]  bin_width  The width of one bin
+     */
     Histogram(int from, int to, int bin_width) : from(from), to(to), bin_width(bin_width)
     {
         length = (to - from) / bin_width + 2;
         counts.resize(length, 0);
     }
 
+    /**
+     * Records a value to the histogram.
+     */
     void
     operator()(int value)
     {
@@ -78,6 +88,13 @@ struct Histogram {
         }
     }
 
+    /**
+     * \brief      Gets a value of a histogram bin.
+     *
+     * \param[in]  index  The index of the bin
+     *
+     * \return     The interval and count of the bin
+     */
     value_s operator[](int index) const
     {
         if (index == 0) {

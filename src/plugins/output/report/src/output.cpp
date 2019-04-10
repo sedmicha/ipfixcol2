@@ -48,6 +48,14 @@
 #include <libfds.h>
 #include "pen_table.h"
 
+/**
+ * \brief      Converts a time_t to a string, a convenience wrapper around the strftime function.
+ *
+ * \param[in]  time    The time
+ * \param[in]  format  The format
+ *
+ * \return     The time as a string
+ */
 std::string
 Output::time_to_str(std::time_t time, const char *format)
 {
@@ -56,22 +64,39 @@ Output::time_to_str(std::time_t time, const char *format)
     return std::string(str);
 }
 
+/**
+ * \brief      Converts an IPv4 address to a string, a convenience wrapper around the inet_ntop function.
+ *
+ * \param[in]  addr  The IPv4 address
+ *
+ * \return     The IPv4 address as a string
+ */
 std::string
 Output::ip_to_str(in_addr addr)
 {
     char str[13] = {'\0'};
-    inet_ntop(AF_INET, &addr.s_addr, str, 13);
+    inet_ntop(AF_INET, &addr, str, 13);
     return std::string(str);
 }
 
+/**
+ * \brief      Converts an IPv^ address to a string, a convenience wrapper around the inet_ntop function.
+ *
+ * \param[in]  addr  The IPv^ address
+ *
+ * \return     The IPv6 address as a string
+ */
 std::string
 Output::ip_to_str(in6_addr addr)
 {
     char str[40] = {'\0'};
-    inet_ntop(AF_INET, &addr.__in6_u.__u6_addr8, str, 40);
+    inet_ntop(AF_INET, &addr, str, 40);
     return std::string(str);
 }
 
+/**
+ * \brief      Returns the first argument if it's not NULL, else the other.
+ */
 const char *
 Output::or_(const char *a, const char *b)
 {
@@ -80,6 +105,9 @@ Output::or_(const char *a, const char *b)
 
 Output::Output(Report &report) : report(report) {}
 
+/**
+ * \brief      Generates the report to its internal variable.
+ */
 void
 Output::generate()
 {
@@ -126,7 +154,7 @@ Output::generate()
         border-right: 1px solid gray;
     }
 
-    .error {
+    .warning {
         color: red;
         font-weight: bold;
         padding: 10px;
@@ -173,7 +201,7 @@ Output::generate()
     s += "<br>";
 
     auto top_pos = s.size();
-    error_list.clear();
+    warning_list.clear();
 
     // Write missing defs is any
     if (!report.missing_defs.empty()) {
@@ -214,16 +242,16 @@ Output::generate()
         write_session(session);
     }
     
-    // Write out error list
-    if (!error_list.empty()) {
+    // Write out warning list
+    if (!warning_list.empty()) {
         std::string ss;
         ss += "<div class='item'>";
         ss += "<div class='heading-small danger'>";
-        ss += "Errors (" + std::to_string(error_list.size()) + ")";
+        ss += "Warnings (" + std::to_string(warning_list.size()) + ")";
         ss += "</div>";
         ss += "<div class='content'>";
-        for (std::string &error : error_list) {
-            ss += error;
+        for (std::string &warning : warning_list) {
+            ss += warning;
         }
         ss += "</div>";
         ss += "</div>";
@@ -261,6 +289,11 @@ for (var i = 0; i < elems.length; i++) {
     s += "</html>";
 }
 
+/**
+ * \brief      Writes a session to the report.
+ *
+ * \param[in]  session  The session
+ */
 void
 Output::write_session(const session_s &session)
 {
@@ -325,6 +358,13 @@ Output::write_session(const session_s &session)
 
     s += "</div>";
 }
+
+/**
+ * \brief      Writes a context to a report.
+ *
+ * \param[in]  context  The context
+ * \param[in]  session  The session
+ */
 void
 Output::write_context(const context_s &context, const session_s &session)
 {
@@ -379,15 +419,15 @@ Output::write_context(const context_s &context, const session_s &session)
     }
 
     if (count_older > 0) {
-        s += "<div class='error'>Timestamps older than 10 minutes found</div>";
-        error_list.push_back("<div class='error'>Timestamps older than 10 minutes found in <a href='#session-"
+        s += "<div class='warning'>Timestamps older than 10 minutes found</div>";
+        warning_list.push_back("<div class='warning'>Timestamps older than 10 minutes found in <a href='#session-"
             + std::to_string(session_id) + "-context-" + std::to_string(context_id) + "'>[Session #"
             + std::to_string(session_id) + ", Context #" + std::to_string(context_id)
             + "]</a></div>");
     }
     if (count_newer > 0) {
-        s += "<div class='error'>Timestamps newer than current time found</div>";
-        error_list.push_back("<div class='error'>Timestamps newer than 10 minutes found in <a href='#session-"
+        s += "<div class='warning'>Timestamps newer than current time found</div>";
+        warning_list.push_back("<div class='warning'>Timestamps newer than 10 minutes found in <a href='#session-"
             + std::to_string(session_id) + "-context-" + std::to_string(context_id) + "'>[Session #"
             + std::to_string(session_id) + " Context #" + std::to_string(context_id)
             + "]</a></div>");
@@ -408,6 +448,11 @@ Output::write_context(const context_s &context, const session_s &session)
     s += "</div>";
 }
 
+/**
+ * \brief      Writes a template to the report.
+ *
+ * \param[in]  template_  The template
+ */
 void
 Output::write_template(const template_s &template_)
 {
@@ -429,6 +474,12 @@ Output::write_template(const template_s &template_)
     s += "</div>";
 }
 
+/**
+ * \brief      Writes the template data to a report.
+ *
+ * \param[in]  data         The template data
+ * \param[in]  template_id  The template identifier
+ */
 void
 Output::write_template_data(const template_s::data_s &data, int template_id)
 {
@@ -509,6 +560,11 @@ Output::write_template_data(const template_s::data_s &data, int template_id)
     s += "</div>";
 }
 
+/**
+ * \brief      Saves the report from its internal variable to the file.
+ *
+ * \param[in]  filename  The filename
+ */
 void
 Output::save_to_file(std::string filename)
 {

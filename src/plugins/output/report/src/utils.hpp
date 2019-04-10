@@ -46,30 +46,95 @@
 #include <netinet/in.h>
 #include <ipfixcol2.h>
 
+/**
+ * \brief      Creates a copy of an ipx_session, memory is allocated and needs to be freed later by a call to ipx_session_destroy.
+ *
+ * \param[in]  session  The session
+ *
+ * \return     The copy of the ipx_session
+ */
 ipx_session *
 copy_ipx_session(const ipx_session *session);
 
+/**
+ * \brief      Compares two IPv4 addresses.
+ *
+ * \param[in]  a     First IPv4 address
+ * \param[in]  b     Second IPv4 address
+ *
+ * \return     true if they match, else false
+ */
 bool
 compare_in_addr(const in_addr a, const in_addr b);
 
+/**
+ * \brief      Compares two IPv6 addresses.
+ *
+ * \param[in]  a     First IPv6 address
+ * \param[in]  b     Second IPv6 address
+ *
+ * \return     true if they match, else false
+ */
 bool
 compare_in6_addr(const in6_addr a, const in6_addr b);
 
+/**
+ * \brief      Compares two ipx_session_net objects.
+ *
+ * \param[in]  a     First ipx_session_net
+ * \param[in]  b     Sedond ipx_session_net
+ *
+ * \return     true if they match, else false
+ */
 bool
 compare_ipx_session_net(const ipx_session_net *a, const ipx_session_net *b);
 
+/**
+ * \brief      Compares two ipx_session objects.
+ *
+ * \param[in]  a     First ipx_session
+ * \param[in]  b     Sedond ipx_session
+ *
+ * \return     true if they match, else false
+ */
 bool
 compare_ipx_session(const ipx_session *a, const ipx_session *b);
 
+/**
+ * \brief      Creates a shallow copy of a ipx_msg_ctx.  
+ * 
+ * \param[in]  ctx   The ipx_msg_ctx to be copied
+ *
+ * \return     { description_of_the_return_value }
+ */
 ipx_msg_ctx
 copy_ipx_msg_ctx(ipx_msg_ctx ctx);
 
+/**
+ * \brief      Compares two ipx_msg_ctx objects. The session is ignored and has to be 
+ *             compared separately by a call to compare_ipx_session if needed.
+ *
+ * \param[in]  a     First ipx_msg_ctx
+ * \param[in]  b     Second ipx_msg_ctx
+ *
+ * \return     { description_of_the_return_value }
+ */
 bool
 compare_ipx_msg_ctx(ipx_msg_ctx a, ipx_msg_ctx b);
 
+/**
+ * \brief      Tries to find a hostname for a given ipx_session_net. A DNS lookup is performed.
+ *
+ * \param[in]  net   The net
+ *
+ * \return     The hostname.
+ */
 std::string
 get_hostname(const ipx_session_net *net);
 
+/**
+ * \brief      A deleter for an ipx_session to be used in unique_ptr or the like.
+ */
 struct ipx_session_deleter {
     void
     operator()(ipx_session *ipx_session_) const
@@ -80,6 +145,9 @@ struct ipx_session_deleter {
     }
 };
 
+/**
+ * \brief      A deleter for a fds_template to be used in unique_ptr or the like.
+ */
 struct fds_template_deleter {
     void
     operator()(fds_template *fds_template_) const

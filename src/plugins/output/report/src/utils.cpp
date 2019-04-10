@@ -42,6 +42,7 @@
 #include "utils.hpp"
 
 #include <iostream>
+#include <cstring>
 
 #include <netdb.h>
 #include <netinet/in.h>
@@ -82,10 +83,7 @@ compare_in_addr(const in_addr a, const in_addr b)
 bool
 compare_in6_addr(const in6_addr a, const in6_addr b)
 {
-    return a.__in6_u.__u6_addr32[0] == b.__in6_u.__u6_addr32[0]
-        && a.__in6_u.__u6_addr32[1] == b.__in6_u.__u6_addr32[1]
-        && a.__in6_u.__u6_addr32[2] == b.__in6_u.__u6_addr32[2]
-        && a.__in6_u.__u6_addr32[3] == b.__in6_u.__u6_addr32[3];
+    return std::memcmp(&a, &b, 16) == 0;
 }
 
 bool

@@ -48,14 +48,13 @@
 
 #include "report.hpp"
 
-struct Output {
+class Output {
+private:
     Report &report; 
     std::string s;
-    std::vector<std::string> error_list;
+    std::vector<std::string> warning_list;
     int session_id = 0;
     int context_id = 0;
-
-    Output(Report &report);
 
     static std::string
     time_to_str(std::time_t time, const char *format = "%F %T");
@@ -70,17 +69,31 @@ struct Output {
     or_(const char *a, const char *b);
 
     void
-    generate();
-
-    void
     write_session(const session_s &session);
+    
     void
     write_context(const context_s &context, const session_s &session);
+    
     void
     write_template(const template_s &template_);
+    
     void
     write_template_data(const template_s::data_s &data, int template_id);
 
+public:
+    Output(Report &report);
+
+    /**
+     * \brief      Generates the report to its internal variable.
+     */
+    void
+    generate();
+    
+    /**
+     * \brief      Saves the report from its internal variable to the file.
+     *
+     * \param[in]  filename  The filename
+     */
     void
     save_to_file(std::string filename);
 };

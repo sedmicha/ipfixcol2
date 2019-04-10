@@ -105,9 +105,15 @@ ipx_plugin_destroy(ipx_ctx_t *ctx, void *cfg)
 {
     ReportInstance *instance = reinterpret_cast<ReportInstance *>(cfg);
 
-    Output output(*instance->report);
-    output.generate();
-    output.save_to_file(instance->config->filename);
+    try {    
+        Output output(*instance->report);
+        output.generate();
+        output.save_to_file(instance->config->filename);
+    } catch (std::exception &ex) {
+        IPX_CTX_ERROR(ctx, "Report plugin: Error while creating output: %s", ex.what());
+    } catch (...) {
+        IPX_CTX_ERROR(ctx, "Report plugin: Unexpected exception has occured!", '\0');
+    }
 
     delete instance->report;
     delete instance->config;

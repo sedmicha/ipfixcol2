@@ -90,22 +90,13 @@ struct session_s {
     bool is_opened = false;
 };
 
-struct Report {
+class Report {
+private:
     fds_iemgr *iemgr;
     Config &config;
-    std::vector<session_s> sessions;
-    std::vector<fds_tfield> missing_defs;
-
-    Report(Config &config, fds_iemgr *iemgr);
-
-    void
-    process_session_msg(ipx_msg_session *msg);
 
     session_s &
     get_session(const ipx_session *ipx_session_);
-
-    void
-    process_ipfix_msg(ipx_msg_ipfix *msg);
 
     context_s &
     get_or_create_context(session_s &session, const ipx_msg_ctx *ipx_ctx_);
@@ -136,6 +127,36 @@ struct Report {
 
     void
     check_timestamps(context_s &context, fds_drec_field *field);
+
+public:
+    std::vector<session_s> sessions;
+    std::vector<fds_tfield> missing_defs;
+
+    Report(Config &config, fds_iemgr *iemgr);
+
+    /**
+     * \brief Process session message from plugin handler
+     * 
+     * This function gets called directly from the plugin handler. 
+     * It handles opening and closing of sessions according to the session event received 
+     * in the session message.
+     *
+     * \param[in] msg The IPX Session message
+     * \throw runtime_error
+     */
+    void
+    process_session_msg(ipx_msg_session *msg);
+    
+    /**
+     * \brief Process IPFIX message from plugin handler
+     * 
+     * This function gets called directly from the plugin handler. 
+     *
+     * \param[in] msg The IPFIX message
+     * \throw runtime_error
+     */
+    void
+    process_ipfix_msg(ipx_msg_ipfix *msg);
 };
 
 #endif // PLUGIN_REPORT__REPORT_HPP

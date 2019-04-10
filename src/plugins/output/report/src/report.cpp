@@ -98,22 +98,13 @@ Report::process_session_msg(ipx_msg_session *msg)
 }
 
 /**
- * \brief Finds and returns session struct corresponding to the ipx_session passed
+ * \brief Process IPFIX message from plugin handler
+ * 
+ * This function gets called directly from the plugin handler. 
  *
- * \param[in] ipx_session_ The ipx_session of the session struct to find
+ * \param[in] msg The IPFIX message
+ * \throw runtime_error
  */
-session_s &
-Report::get_session(const ipx_session *ipx_session_)
-{
-    for (session_s &session : sessions) {
-        if (compare_ipx_session(session.ipx_session_.get(), ipx_session_) && session.is_opened) {
-            return session;
-        }
-    }
-    // Session should always be found as it gets created on SESSION_OPEN event
-    assert(false && "session not found");
-}
-
 void
 Report::process_ipfix_msg(ipx_msg_ipfix *msg)
 {
@@ -145,8 +136,6 @@ Report::process_ipfix_msg(ipx_msg_ipfix *msg)
             process_template_set(context, &sets[i], set_id);
         } else if (set_id >= FDS_IPFIX_SET_MIN_DSET) {
             process_data_set(context, &sets[i], set_id);
-        } else {
-            assert(false && "unhandled set id");
         }
     }
 
@@ -157,6 +146,32 @@ Report::process_ipfix_msg(ipx_msg_ipfix *msg)
         process_data_record(context, &ipfix_rec->rec);
     }
 }
+
+/**
+ * \brief Finds and returns session struct corresponding to the ipx_session passed
+ *
+ * \param[in] ipx_session_ The ipx_session of the session struct to find
+ */
+session_s &
+Report::get_session(const ipx_session *ipx_session_)
+{
+    for (session_s &session : sessions) {
+        if (compare_ipx_session(session.ipx_session_.get(), ipx_session_) && session.is_opened) {
+            return session;
+        }
+    }
+    // Session should always be found as it gets created on SESSION_OPEN event
+    assert(false && "session not found");
+}
+
+/**
+ * \brief      Gets or creates an odid context for the session. 
+ *
+ * \param      session   The session
+ * \param[in]  ipx_ctx_  The ipx message context
+ *
+ * \return     The existing or newly created context.
+ */
 context_s &
 Report::get_or_create_context(session_s &session, const ipx_msg_ctx *ipx_ctx_)
 {
@@ -177,6 +192,13 @@ Report::get_or_create_context(session_s &session, const ipx_msg_ctx *ipx_ctx_)
     return context;
 }
 
+/**
+ * \brief      Processes a template set.
+ *
+ * \param      context  The odid context
+ * \param      set      The template set
+ * \param[in]  set_id   The set identifier
+ */
 void
 Report::process_template_set(context_s &context, ipx_ipfix_set *set, int set_id)
 {
@@ -200,6 +222,13 @@ Report::process_template_set(context_s &context, ipx_ipfix_set *set, int set_id)
     }
 }
 
+/**
+ * \brief      Performs a template withdrawal.
+ *
+ * \param      context  The odid context
+ * \param[in]  trec     The template record
+ * \param[in]  set_id   The set identifier
+ */
 void
 Report::withdraw_template(context_s &context, const fds_ipfix_wdrl_trec *trec, int set_id)
 {
@@ -224,6 +253,12 @@ Report::withdraw_template(context_s &context, const fds_ipfix_wdrl_trec *trec, i
     }
 }
 
+/**
+ * \brief      Processes a template from a template set, this includes parsing and recording various stats about it.
+ *
+ * \param      context  The odid context
+ * \param[in]  it       Iterator to the template set
+ */
 void
 Report::parse_and_process_template(context_s &context, const fds_tset_iter *it)
 {
@@ -262,6 +297,15 @@ Report::parse_and_process_template(context_s &context, const fds_tset_iter *it)
     }
 }
 
+/**
+ * \brief      Adds a template to the odid context.
+ *
+ * \param      context    The context
+ * \param      tmplt      The tmplt
+ * \param      template_  The template
+ *
+ * \return     { description_of_the_return_value }
+ */
 template_s &
 Report::add_template(context_s &context, fds_template *tmplt, template_s *template_)
 {
@@ -283,6 +327,14 @@ Report::add_template(context_s &context, fds_template *tmplt, template_s *templa
     return *template_;
 }
 
+/**
+ * \brief      Find a template in the odid context by its template id.
+ *
+ * \param      context      The odid context
+ * \param[in]  template_id  The template identifier
+ *
+ * \return     The template if found else nullptr
+ */
 template_s *
 Report::find_template(context_s &context, int template_id)
 {
@@ -294,6 +346,11 @@ Report::find_template(context_s &context, int template_id)
     return nullptr;
 }
 
+/**
+ * \brief      Checks for fields in a template that are missing a definition.
+ *
+ * \param[in]  tmplt  The template
+ */
 void
 Report::check_undef_fields(const fds_template *tmplt)
 {
@@ -312,6 +369,13 @@ Report::check_undef_fields(const fds_template *tmplt)
     }
 }
 
+/**
+ * \brief      Processes a data set.
+ *
+ * \param      context  The odid context
+ * \param      set      The data set
+ * \param[in]  set_id   The set identifier
+ */
 void
 Report::process_data_set(context_s &context, ipx_ipfix_set *set, int set_id)
 {
@@ -340,6 +404,12 @@ Report::process_data_set(context_s &context, ipx_ipfix_set *set, int set_id)
     }
 }
 
+/**
+ * \brief      Processes a single parsed data record.
+ *
+ * \param      context  The odid context
+ * \param      drec     The data record
+ */
 void
 Report::process_data_record(context_s &context, fds_drec *drec)
 {
@@ -356,6 +426,12 @@ Report::process_data_record(context_s &context, fds_drec *drec)
     }
 }
 
+/**
+ * \brief      Checks the timestamp fields and records the time difference from current system time.
+ *
+ * \param      context  The odid context
+ * \param      field    The timestamp field
+ */
 void
 Report::check_timestamps(context_s &context, fds_drec_field *field)
 {
