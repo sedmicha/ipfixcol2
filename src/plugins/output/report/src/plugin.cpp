@@ -70,7 +70,7 @@ ipx_plugin_init(ipx_ctx_t *ctx, const char *params)
 {
     ipx_msg_mask_t mask = IPX_MSG_IPFIX | IPX_MSG_SESSION;
     if (ipx_ctx_subscribe(ctx, &mask, nullptr) != IPX_OK) {
-        IPX_CTX_ERROR(ctx, "Error subscribing to messages");
+        IPX_CTX_ERROR(ctx, "Error subscribing to messages", '\0');
         return IPX_ERR_DENIED;
     }
 

@@ -78,7 +78,7 @@ private:
     write_template(const template_s &template_);
     
     void
-    write_template_data(const template_s::data_s &data, int template_id);
+    write_template_data(const template_s::data_s &data);
 
 public:
     Output(Report &report);

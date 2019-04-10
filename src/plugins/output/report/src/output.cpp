@@ -458,14 +458,14 @@ Output::write_template(const template_s &template_)
 {
     s += "<div class='item'>";
     s += "<div class='heading'>Template ID " + std::to_string(template_.template_id) + "</div>";
-    write_template_data(template_.data, template_.template_id);
+    write_template_data(template_.data);
     if (!template_.history.empty()) {
         s += "<details>";
         s += "<summary class='heading-small'>Template history</summary>";
         s += "<div class='nested'>";
         for (const template_s::data_s &data : template_.history) {
             s += "<div class='item'>";
-            write_template_data(data, template_.template_id);
+            write_template_data(data);
             s += "</div>";
         }
         s += "</div>";
@@ -478,10 +478,9 @@ Output::write_template(const template_s &template_)
  * \brief      Writes the template data to a report.
  *
  * \param[in]  data         The template data
- * \param[in]  template_id  The template identifier
  */
 void
-Output::write_template_data(const template_s::data_s &data, int template_id)
+Output::write_template_data(const template_s::data_s &data)
 {
     s += "<div class='content'>";
     s += "<table class='info'>";
