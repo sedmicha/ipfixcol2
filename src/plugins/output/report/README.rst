@@ -16,6 +16,7 @@ Example configuration
 ---------------------
 
 .. code-block:: xml
+
     <output>
         <name>Report output</name>
         <plugin>report</plugin>
