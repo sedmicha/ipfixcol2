@@ -126,18 +126,17 @@ Output::generate()
         margin: 0 auto;
     }
     .heading {
-        font-size: 20pt;
-        padding: 10px;
-        padding-top: 15px;
+        font-size: 18pt;
+        padding: 6px;
         background: lightgray;
     }
     .heading-small {
-        font-size: 16pt;
-        padding: 10px;
+        font-size: 14pt;
+        padding: 6px;
         background: white;
     }
     .content {
-        padding: 10px;
+        padding: 6px;
         background: white;
     }
     .nested {
@@ -149,15 +148,27 @@ Output::generate()
         border: 1px solid gray;
         border-right: none;
         background: white;
+        font-size: 11pt;
     }
     main > .item {
         border-right: 1px solid gray;
     }
 
     .warning {
+        padding: 3px;
+        margin: 3px;
+        border: 1px solid red;
+    }
+
+    .warning-text {
         color: red;
         font-weight: bold;
-        padding: 10px;
+    }
+
+    .hint {
+        color: black;
+        font-size: 11pt;
+        font-style: italic;
     }
 
     .danger {
@@ -209,6 +220,8 @@ Output::generate()
         s += "<details>";
         s += "<summary class='heading-small danger'>Missing information element definitions (" + std::to_string(report.missing_defs.size()) + ")</summary>";
         s += "<div class='content'>";
+        s += "<p class='hint'>Missing information element definitions can cause problems with some plugins, such as when converting to JSON. "
+             "See how to add missing definitions to libfds <a href='https://github.com/CESNET/libfds'>here</a></p>";
         s += "<table class='data-table'>";
         s += "<tr><th>ID</th><th>EN</th><th>Organization</th><th>Contact</th><th>Email</th></tr>";
         for (fds_tfield &field : report.missing_defs) {
@@ -419,11 +432,15 @@ Output::write_context(const context_s &context, const session_s &session)
     }
 
     if (count_older > 0) {
-        s += "<div class='warning'>Timestamps older than 10 minutes found</div>";
-        warning_list.push_back("<div class='warning'>Timestamps older than 10 minutes found in <a href='#session-"
+        s += 
+        "<div class='warning'>"
+        "<p class='warning-text'>Timestamps older than 10 minutes found</p>"
+        "<p class='hint'>Timestamp anomalies are usually caused by missing system clock synchronization (e.g. NTP) on the side of the exporter or collector</p>"
+        "</div>";
+        warning_list.push_back("<p class='warning-text'>Timestamps older than 10 minutes found in <a href='#session-"
             + std::to_string(session_id) + "-context-" + std::to_string(context_id) + "'>[Session #"
             + std::to_string(session_id) + ", Context #" + std::to_string(context_id)
-            + "]</a></div>");
+            + "]</a></p>");
     }
     if (count_newer > 0) {
         s += "<div class='warning'>Timestamps newer than current time found</div>";
