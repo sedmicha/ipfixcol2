@@ -1,0 +1,114 @@
+#!/bin/bash
+
+ipfixcol2_command="ipfixcol2"
+ipfixcol2_pid=
+config_file="$(mktemp /tmp/ipfixcol2conf.XXXXXXX.xml)"
+tcp_port=4739
+udp_port=4739
+report_file="$(mktemp /tmp/ipfixcol2report.XXXXXXX.html)"
+timeout=10
+
+usage() {
+    echo "Usage: ipfixrun [options]"
+    echo "  -h            show this help"
+    echo "  -t SECONDS    the number of seconds the collector will run for, 0 = forever"
+    echo "  -p PORT       the TCP and UDP port the collector will be listening on"
+    echo "  -f FILENAME   filename the report file will be saved to"
+}
+
+config_write() {
+    echo $* >> "$config_file"
+}
+
+config_create() {
+    config_write "<ipfixcol2>"
+    config_write "  <inputPlugins>"
+    config_write "    <input>"
+    config_write "      <name>TCP collector</name>"
+    config_write "      <plugin>tcp</plugin>"
+    config_write "      <params>"
+    config_write "        <localPort>$tcp_port</localPort>"
+    config_write "        <localIPAddress></localIPAddress>"
+    config_write "      </params>"
+    config_write "    </input>"
+    config_write "    <input>"
+    config_write "      <name>UDP collector</name>"
+    config_write "      <plugin>udp</plugin>"
+    config_write "      <params>"
+    config_write "        <localPort>$udp_port</localPort>"
+    config_write "        <localIPAddress></localIPAddress>"
+    config_write "      </params>"
+    config_write "    </input>"
+    config_write "  </inputPlugins>"
+    config_write ""
+    config_write "  <outputPlugins>"
+    config_write "    <output>"
+    config_write "      <name>Report output</name>"
+    config_write "      <plugin>report</plugin>"
+    config_write "      <params>"
+    config_write "          <filename>$report_file</filename>"
+    config_write "      </params>"
+    config_write "    </output>"
+    config_write "  </outputPlugins>"
+    config_write "</ipfixcol2>"
+}
+
+
+run() {
+    "$ipfixcol2_command" -c "$config_file" &
+    ipfixcol2_pid=$!
+}
+
+finish() {
+    [[ $1 -eq 0 ]] && kill $ipfixcol2_pid
+    wait $ipfixcol2_pid
+    xdg-open "$report_file" > /dev/null 2>&1
+}
+
+main() {
+    while getopts ":ht:" opt; do
+        case "$opt" in
+            t)
+                if ! [[ "$OPTARG" =~ ^[0-9]+$ ]]; then
+                    echo "Invalid timeout value: not a number"
+                    exit 1
+                fi
+                if [ $OPTARG -lt 0 ]; then
+                    echo "Invalid timeout value: cannot be negative"
+                    exit 1
+                fi
+                timeout=$OPTARG
+                ;;
+            p)
+                if [ $OPTARG -lt 0 -o $OPTARG -gt 65535 ]; then
+                    echo "Invalid port value"
+                    exit 1
+                fi
+                udp_port=$OPTARG
+                tcp_port=$OPTARG
+                ;;
+            f)
+                report_file=$OPTARG
+                ;;
+            h)
+                usage
+                exit 0
+                ;;
+            \?)
+                echo "Unknown option: -$OPTARG"
+                exit 1
+                ;;
+        esac
+    done
+
+    config_create
+    run
+    trap "finish 1" INT
+    if [ $timeout -gt 0 ]; then
+        sleep $timeout && finish 0
+    else
+        finish 1
+    fi
+}
+
+main $*
