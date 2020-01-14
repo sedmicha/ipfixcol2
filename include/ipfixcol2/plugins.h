@@ -397,6 +397,14 @@ IPX_API const fds_iemgr_t *
 ipx_ctx_iemgr_get(ipx_ctx_t *ctx);
 
 /**
+ * \brief Get size of one IPFIX record with registered extensions (in bytes)
+ * \param[in] ctx Plugin context
+ * \return Size (always non-zero)
+ */
+IPX_API size_t
+ipx_ctx_recsize_get(const ipx_ctx_t *ctx);
+
+/**
  * @}
  * @}
  */

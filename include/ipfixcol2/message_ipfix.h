@@ -197,6 +197,27 @@ ipx_msg_ipfix2base(ipx_msg_ipfix_t *msg)
     return (ipx_msg_t *) msg;
 }
 
+/**
+ * \brief Add a new IPFIX Set
+ *
+ * The record is uninitialized and user MUST fill it!
+ * \param[in] msg IPFIX Message wrapper
+ * \return Pointer to the record or NULL (memory allocation error)
+ */
+IPX_API struct ipx_ipfix_set *
+ipx_msg_ipfix_add_set_ref(struct ipx_msg_ipfix *msg);
+
+/**
+ * \brief Add a new IPFIX Data Record
+ *
+ * The record is uninitialized and user MUST fill it!
+ * \warning The wrapper \p msg_ref can be reallocated and different pointer can be returned!
+ * \param[in,out] msg_ref IPFIX Message wrapper
+ * \return Pointer to the record or NULL (memory allocation error)
+ */
+IPX_API struct ipx_ipfix_record *
+ipx_msg_ipfix_add_drec_ref(struct ipx_msg_ipfix **msg_ref);
+
 /**@}*/
 #ifdef __cplusplus
 }

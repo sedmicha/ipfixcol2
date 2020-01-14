@@ -162,14 +162,6 @@ IPX_API int
 ipx_ctx_run(ipx_ctx_t *ctx);
 
 /**
- * \brief Get size of one IPFIX record with registered extensions (in bytes)
- * \param[in] ctx Plugin context
- * \return Size (always non-zero)
- */
-IPX_API size_t
-ipx_ctx_recsize_get(const ipx_ctx_t *ctx);
-
-/**
  * \brief Set size of one IPFIX record withe registered extensions (in bytes)
  *
  * \warning
