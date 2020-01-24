@@ -1,4 +1,5 @@
 add_library(filter-intermediate MODULE
+    msg_builder.h
     filter.c
     config.c
     config.h
