@@ -25,6 +25,14 @@ set(CORE_SOURCE
     netflow2ipfix/netflow9_parsers.c
     netflow2ipfix/netflow9_parsers.h
     netflow2ipfix/netflow_structs.h
+    profiles/profile.c
+    profiles/profile.h
+    profiles/pmatcher.c
+    profiles/pmatcher.h
+    profiles/pevents.c
+    profiles/pevents.h
+    profiles/common.c
+    profiles/common.h
     api.c
     context.c
     context.h

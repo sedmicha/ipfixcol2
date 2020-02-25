@@ -18,6 +18,7 @@ set(SUB_HEADERS
     ipfixcol2/session.h
     ipfixcol2/utils.h
     ipfixcol2/verbose.h
+    ipfixcol2/profiles.h
     "${PROJECT_BINARY_DIR}/include/ipfixcol2/api.h"
 )
 

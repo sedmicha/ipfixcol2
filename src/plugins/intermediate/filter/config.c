@@ -19,13 +19,13 @@ static const struct fds_xml_args args_params[] = {
     FDS_OPTS_END
 };
 
-config_s *
+struct config *
 config_parse(ipx_ctx_t *ctx, const char *params)
 {
-    config_s *cfg = NULL;
+    struct config *cfg = NULL;
     fds_xml_t *parser = NULL;
 
-    cfg = calloc(1, sizeof(config_s));
+    cfg = calloc(1, sizeof(struct config));
     if (!cfg) {
         IPX_CTX_ERROR(ctx, "Memory allocation error (%s:%d)", __FILE__, __LINE__);
         goto error;
@@ -76,7 +76,7 @@ error:
 }
 
 void
-config_destroy(config_s *cfg)
+config_destroy(struct config *cfg)
 {
     free(cfg->expr);
     free(cfg);
