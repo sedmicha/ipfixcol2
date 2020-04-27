@@ -1,10 +1,14 @@
 include(${CMAKE_SOURCE_DIR}/CMakeModules/unit_tests.cmake)
 
+# Find libfds
+find_package(LibFds 0.2.0 REQUIRED)
+
 # Include public headers
 include_directories(
     "${PROJECT_SOURCE_DIR}/include/"
     "${PROJECT_BINARY_DIR}/include/"
     "${PROJECT_SOURCE_DIR}/src/"     # make internal function available for testing
+    "${FDS_INCLUDE_DIRS}"            # libfds header files
 )
 
 # List of tests

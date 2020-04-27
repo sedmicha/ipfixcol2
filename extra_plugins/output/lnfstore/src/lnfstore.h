@@ -48,6 +48,7 @@
 
 #include "configuration.h"
 #include "storage_basic.h"
+#include "storage_profiles.h"
 #include "translator.h"
 
 extern const char *msg_module;
@@ -64,13 +65,15 @@ struct conf_lnfstore {
 
     struct {
         stg_basic_t    *basic;    /**< Store all samples                     */
-        //stg_profiles_t *profiles; /**< Store records based on profiles     */
+        stg_profiles_t *profiles; /**< Store records based on profiles     */
     } storage; /**< Only one type of storage is initialized at the same time */
 
     struct {
         lnf_rec_t *rec_ptr;       /**< LNF record (converted IPFIX record)   */
         translator_t *translator; /**< IPFIX to LNF translator               */
     } record; /**< Record conversion */
+
+    ipx_ctx_ext_t *profiles_ext;
 };
 
 

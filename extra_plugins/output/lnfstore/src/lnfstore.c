@@ -99,18 +99,32 @@ ipx_plugin_init(ipx_ctx_t *ctx, const char *params) {
     }
 
     // Init basic/profile file storage
-    //if (conf->params->profiles.en) {
-    //    conf->storage.profiles = stg_profiles_create(parsed_params);
-    //} else {
+    if (conf->params->profiles.en) {
+        conf->storage.profiles = stg_profiles_create(ctx, parsed_params);
+    } else {
         conf->storage.basic = stg_basic_create(ctx, parsed_params);
-    //}
+    }
 
-    if (!conf->storage.basic/* && !conf->storage.profiles*/) {
+    if (!conf->storage.basic && !conf->storage.profiles) {
         IPX_CTX_ERROR(ctx, "Failed to initialize an internal structure for file storage(s).", '\0');
         translator_destroy(conf->record.translator);
         lnf_rec_free(conf->record.rec_ptr);
         configuration_free(parsed_params);
         free(conf);
+        return IPX_ERR_DENIED;
+    }
+
+    // Register as profiles extension consumer if profiles are enabled
+    if (conf->params->profiles.en) {
+        int ret = ipx_ctx_ext_consumer(ctx, "profiles-v1", "main_profiles", &conf->profiles_ext);
+        if (ret != IPX_OK) {
+            IPX_CTX_ERROR("Failed to register as profiles extension consumer.", '\0');
+            stg_profiles_destroy(conf->storage.profiles);
+            translator_destroy(conf->record.translator);
+            lnf_rec_free(conf->record.rec_ptr);
+            configuration_free(parsed_params);
+            free(conf);
+        }
     }
 
     // Save the configuration
@@ -139,7 +153,11 @@ ipx_plugin_process(ipx_ctx_t *ctx, void *cfg, ipx_msg_t *msg)
         conf->window_start = new_time;
 
         // Update storage files
-        stg_basic_new_window(conf->storage.basic, new_time);
+        if (conf->params->profiles.en) {
+            stg_profiles_new_window(conf->storage.profiles, new_time);
+        } else {
+            stg_basic_new_window(conf->storage.basic, new_time);
+        }
     }
 
     ipx_msg_ipfix_t *ipfix = ipx_msg_base2ipfix(msg);
@@ -147,30 +165,68 @@ ipx_plugin_process(ipx_ctx_t *ctx, void *cfg, ipx_msg_t *msg)
     for (uint32_t i = 0; i < rec_cnt; i++) {
         // Get a pointer to the next record
         struct ipx_ipfix_record *ipfix_rec = ipx_msg_ipfix_get_drec(ipfix, i);
+
         bool biflow = (ipfix_rec->rec.tmplt->flags & FDS_TEMPLATE_BIFLOW) != 0;
 
         // Fill record
         uint16_t flags = biflow ? FDS_DREC_BIFLOW_FWD : 0; // In case of biflow, forward fields only
-        lnf_rec_t *lnf_rec = conf->record.rec_ptr;
-        if (translator_translate(conf->record.translator, &ipfix_rec->rec, lnf_rec, flags) <= 0) {
-            // Nothing to store
-            continue;
+        
+        if (conf->params->profiles.en) {
+            // Profiles extension data
+            void *ext_data;
+            size_t ext_size;
+
+            int ret = ipx_ctx_ext_get(conf->profiles_ext, ipfix_rec, &ext_data, &ext_size);
+            if (ret != IPX_OK) {
+                IPX_CTX_ERROR(ctx, "Failed getting profiles extension data for data record #%u.", i);
+                continue;
+            }
+
+            lnf_rec_t *lnf_rec = conf->record.rec_ptr;
+            if (translator_translate(conf->record.translator, &ipfix_rec->rec, lnf_rec, flags) <= 0) {
+                // Nothing to store
+                continue;
+            }
+
+            stg_profiles_store(conf->storage.profiles, lnf_rec, ext_data);
+
+            // Is it biflow? Store the reverse direction
+            if (!biflow) {
+                continue;
+            }
+
+            flags = FDS_DREC_BIFLOW_REV;
+            if (translator_translate(conf->record.translator, &ipfix_rec->rec, lnf_rec, flags) <= 0) {
+                // Nothing to store
+                continue;
+            }
+
+            stg_profiles_store(conf->storage.profiles, lnf_rec, ext_data);
+
+        } else {
+            lnf_rec_t *lnf_rec = conf->record.rec_ptr;
+            if (translator_translate(conf->record.translator, &ipfix_rec->rec, lnf_rec, flags) <= 0) {
+                // Nothing to store
+                continue;
+            }
+
+            stg_basic_store(conf->storage.basic, lnf_rec);
+
+            // Is it biflow? Store the reverse direction
+            if (!biflow) {
+                continue;
+            }
+
+            flags = FDS_DREC_BIFLOW_REV;
+            if (translator_translate(conf->record.translator, &ipfix_rec->rec, lnf_rec, flags) <= 0) {
+                // Nothing to store
+                continue;
+            }
+
+            stg_basic_store(conf->storage.basic, lnf_rec);
+
         }
 
-        stg_basic_store(conf->storage.basic, lnf_rec);
-
-        // Is it biflow? Store the reverse direction
-        if (!biflow) {
-            continue;
-        }
-
-        flags = FDS_DREC_BIFLOW_REV;
-        if (translator_translate(conf->record.translator, &ipfix_rec->rec, lnf_rec, flags) <= 0) {
-            // Nothing to store
-            continue;
-        }
-
-        stg_basic_store(conf->storage.basic, lnf_rec);
     }
 
     return 0;
@@ -184,11 +240,11 @@ ipx_plugin_destroy(ipx_ctx_t *ctx, void *cfg)
     struct conf_lnfstore *conf = (struct conf_lnfstore *) cfg;
 
     // Destroy mode resources
-    //if (conf->params->profiles.en) {
-    //    stg_profiles_destroy(conf->storage.profiles);
-    //} else {
+    if (conf->params->profiles.en) {
+        stg_profiles_destroy(conf->storage.profiles);
+    } else {
         stg_basic_destroy(conf->storage.basic);
-    //}
+    }
 
     // Destroy a translator and a record
     translator_destroy(conf->record.translator);

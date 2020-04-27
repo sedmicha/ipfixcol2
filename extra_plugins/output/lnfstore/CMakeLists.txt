@@ -73,6 +73,8 @@ add_library(lnfstore-output MODULE
     src/storage_basic.h
     src/storage_common.c
     src/storage_common.h
+    src/storage_profiles.c
+    src/storage_profiles.h
     src/translator.c
     src/translator.h
     src/utils.c

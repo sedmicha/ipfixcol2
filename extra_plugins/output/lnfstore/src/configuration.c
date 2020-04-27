@@ -65,6 +65,7 @@
  *  <suffixMask>...</suffixMask>                   <!-- optional -->
  *  <identificatorField>...</identificatorField>   <!-- optional -->
  *  <compress>...</compress>                       <!-- optional -->
+ *  <profiles>...</compress>                       <!-- optional -->
  *  <dumpInterval>
  *    <timeWindow>...</timeWindow>
  *    <align>...</align>
@@ -85,6 +86,7 @@ enum params_xml_nodes {
     NODE_COMPRESS,
     NODE_DUMP,
     NODE_IDX,
+    NODE_PROFILES,
 
     DUMP_WINDOW,
     DUMP_ALIGN,
@@ -118,6 +120,7 @@ static const struct fds_xml_args args_params[] = {
     FDS_OPTS_ELEM(NODE_STORAGE,  "storagePath",        FDS_OPTS_T_STRING, 0),
     FDS_OPTS_ELEM(NODE_ID_FIELD, "identificatorField", FDS_OPTS_T_STRING, FDS_OPTS_P_OPT),
     FDS_OPTS_ELEM(NODE_COMPRESS, "compress",           FDS_OPTS_T_BOOL,   FDS_OPTS_P_OPT),
+    FDS_OPTS_ELEM(NODE_PROFILES, "profiles",           FDS_OPTS_T_BOOL,   FDS_OPTS_P_OPT),
     FDS_OPTS_NESTED(NODE_DUMP,   "dumpInterval",       args_dump,         FDS_OPTS_P_OPT),
     FDS_OPTS_NESTED(NODE_IDX,    "index",              args_idx,          FDS_OPTS_P_OPT),
     FDS_OPTS_END
@@ -333,6 +336,10 @@ configuration_parse_root(ipx_ctx_t *ctx, fds_xml_ctx_t *root, struct conf_params
         case NODE_COMPRESS:
             assert(content->type == FDS_OPTS_T_BOOL);
             cnf->file_lnf.compress = content->val_bool;
+            break;
+        case NODE_PROFILES:
+            assert(content->type == FDS_OPTS_T_BOOL);
+            cnf->profiles.en = content->val_bool;
             break;
         case NODE_DUMP:
             assert(content->type == FDS_OPTS_T_CONTEXT);

@@ -7,7 +7,7 @@
 #include "../verbose.h"
 
 #define PROFILES_ERROR(fmt, ...)     IPX_ERROR("profiles", fmt, ## __VA_ARGS__)
-#define PROFILES_MEMORY_ERROR()      PROFILES_ERROR("cannot allocate memory")
+#define PROFILES_MEMORY_ERROR()      PROFILES_ERROR("cannot allocate memory at %s:%d", __FILE__, __LINE__)
 
 /**
  * Add an element to the end of array

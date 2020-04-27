@@ -401,29 +401,30 @@ update_mappings(struct pevents_mapping *old_mapping, struct pevents_mapping *new
 static void
 call_data_callbacks(struct ipx_pevents *pevents, struct ipx_pmatcher_result result, void *record)
 {
-    for (size_t i = 0; i < pevents->mapping.profiles_cnt; i++) {
-        if (test_bit(result.profiles, i)) {
-            struct pevents_profile_item *prof = &pevents->mapping.profiles[i];
-            struct ipx_pevents_ctx ctx;
-            ctx.profile = prof->ptr;
-            ctx.local = prof->local;
-            ctx.global = pevents->global;
-            pevents->profile_cbs.on_data(&ctx, record);
-            prof->local = ctx.local;
-            pevents->global = pevents->global;
+    if (pevents->profile_cbs.on_data != NULL) {
+        for (size_t i = 0; i < pevents->mapping.profiles_cnt; i++) {
+            if (test_bit(result.profiles, i)) {
+                struct pevents_profile_item *prof = &pevents->mapping.profiles[i];
+                struct ipx_pevents_ctx ctx;
+                ctx.ptr.profile = prof->ptr;
+                ctx.user.local = prof->local;
+                ctx.user.global = pevents->global;
+                pevents->profile_cbs.on_data(&ctx, record);
+            }
         }
     }
 
-    for (size_t i = 0; i < pevents->mapping.channels_cnt; i++) {
-        if (test_bit(result.channels, i)) {
-            struct pevents_channel_item *chan = &pevents->mapping.channels[i];
-            struct ipx_pevents_ctx ctx;
-            ctx.channel = chan->ptr;
-            ctx.local = chan->local;
-            ctx.global = pevents->global;
-            pevents->channel_cbs.on_data(&ctx, record);
-            chan->local = ctx.local;
-            pevents->global = ctx.global;
+    if (pevents->channel_cbs.on_data != NULL) {
+        for (size_t i = 0; i < pevents->mapping.channels_cnt; i++) {
+            // printf("XXXX: channel %d: %s\n", i, test_bit(result.channels, i) ? "yes" : "no");
+            if (test_bit(result.channels, i)) {
+                struct pevents_channel_item *chan = &pevents->mapping.channels[i];
+                struct ipx_pevents_ctx ctx;
+                ctx.ptr.channel = chan->ptr;
+                ctx.user.local = chan->local;
+                ctx.user.global = pevents->global;
+                pevents->channel_cbs.on_data(&ctx, record);
+            }
         }
     }
 }
@@ -455,40 +456,53 @@ reconfigure(struct ipx_pevents *pevents, struct ipx_profile_tree *ptree)
     for (size_t i = 0; i < diff_list.diffs_cnt; i++) {
         struct pevents_diff *diff = &diff_list.diffs[i];
         struct ipx_pevents_ctx ctx;
+        ctx.user.global = pevents->global; 
         union ipx_pevents_target target;
         
         switch (diff->action) {
         case CHAN_DELETE:
-            ctx.channel = diff->old_channel;
-            ctx.local = pevents->mapping.channels[diff->old_channel->bit_offset].local;
-            pevents->channel_cbs.on_delete(&ctx);
+            ctx.ptr.channel = diff->old_channel;
+            ctx.user.local = pevents->mapping.channels[diff->old_channel->bit_offset].local;
+            if (pevents->channel_cbs.on_delete != NULL) {
+                pevents->channel_cbs.on_delete(&ctx);
+            }
             break;
         case PROF_DELETE:
-            ctx.profile = diff->old_profile;
-            ctx.local = pevents->mapping.profiles[diff->old_profile->bit_offset].local;
-            pevents->profile_cbs.on_delete(&ctx);
+            ctx.ptr.profile = diff->old_profile;
+            ctx.user.local = pevents->mapping.profiles[diff->old_profile->bit_offset].local;
+            if (pevents->profile_cbs.on_delete != NULL) {
+                pevents->profile_cbs.on_delete(&ctx);
+            }
             break;
         case CHAN_UPDATE:
-            ctx.channel = diff->new_channel;
-            ctx.local = new_mapping.channels[diff->new_channel->bit_offset].local;
+            ctx.ptr.channel = diff->new_channel;
+            ctx.user.local = new_mapping.channels[diff->new_channel->bit_offset].local;
             target.channel = diff->old_channel;
-            pevents->channel_cbs.on_update(&ctx, target);
+            if (pevents->channel_cbs.on_update != NULL) {
+                pevents->channel_cbs.on_update(&ctx, target);
+            }
             break;
         case PROF_UPDATE:
-            ctx.profile = diff->new_profile;
-            ctx.local = new_mapping.profiles[diff->new_profile->bit_offset].local;
+            ctx.ptr.profile = diff->new_profile;
+            ctx.user.local = new_mapping.profiles[diff->new_profile->bit_offset].local;
             target.profile = diff->old_profile;
-            pevents->profile_cbs.on_update(&ctx, target);
+            if (pevents->profile_cbs.on_update != NULL) {
+                pevents->profile_cbs.on_update(&ctx, target);
+            }
             break;
         case CHAN_CREATE:
-            ctx.channel = diff->new_channel;
-            ctx.local = new_mapping.channels[diff->new_channel->bit_offset].local;
-            pevents->channel_cbs.on_create(&ctx);
+            ctx.ptr.channel = diff->new_channel;
+            if (pevents->channel_cbs.on_create != NULL) {
+                void *local = pevents->channel_cbs.on_create(&ctx);
+                new_mapping.channels[diff->new_channel->bit_offset].local = local;
+            }
             break;
         case PROF_CREATE:
-            ctx.profile = diff->new_profile;
-            ctx.local = new_mapping.profiles[diff->new_profile->bit_offset].local;
-            pevents->profile_cbs.on_create(&ctx);
+            ctx.ptr.profile = diff->new_profile;
+            if (pevents->profile_cbs.on_create != NULL) {
+                void *local = pevents->profile_cbs.on_create(&ctx);
+                new_mapping.profiles[diff->new_profile->bit_offset].local = local;
+            }
             break;
         default:
             assert(0 && "invalid diff action");
@@ -518,10 +532,14 @@ ipx_pevents_create(struct ipx_pevents_cb_set profile_cbs,
 
 int
 ipx_pevents_process(ipx_pevents_t *pevents, 
-                    struct ipx_profile_tree *ptree, 
-                    struct ipx_pmatcher_result result,
-                    void *record)
+                    void *record, void *ext_data)
 {
+
+    struct ipx_profiles_ext *ext = ext_data;
+
+    struct ipx_profiles_tree *ptree = ext->ptree;
+    struct ipx_pmatcher_result result = ipx_profiles_get_matches(ext);
+
     if (pevents->ptree != ptree) {
         int rc = reconfigure(pevents, ptree);
         if (rc != IPX_OK) {
@@ -551,4 +569,28 @@ void
 ipx_pevents_global_get(ipx_pevents_t *pevents)
 {
     return pevents->global;
+}
+
+void
+ipx_pevents_for_each(ipx_pevents_t *pevents, ipx_pevents_fn *prof_fn, ipx_pevents_fn *chan_fn)
+{
+    struct pevents_mapping *mapping = &pevents->mapping;
+
+    if (prof_fn != NULL) {
+        for (size_t i = 0; i < pevents->mapping.profiles_cnt; i++) {
+            struct ipx_pevents_ctx ctx;
+            ctx.ptr.profile = mapping->profiles[i].ptr;
+            ctx.user.local = mapping->profiles[i].local;
+            prof_fn(&ctx);
+        }
+    }
+
+    if (chan_fn != NULL) {
+        for (size_t i = 0; i < pevents->mapping.channels_cnt; i++) {
+            struct ipx_pevents_ctx ctx;
+            ctx.ptr.channel = mapping->channels[i].ptr;
+            ctx.user.local = mapping->channels[i].local;
+            chan_fn(&ctx);
+        }
+    }
 }

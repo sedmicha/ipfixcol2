@@ -35,6 +35,8 @@ enum ipx_profile_type {
 struct ipx_profile {
     size_t bit_offset;
 
+    char *path;
+
     enum ipx_profile_type type; 
     char *name;
     char *directory;
@@ -56,6 +58,10 @@ struct ipx_profile_tree {
     size_t channels_cnt;
 };
 
+struct ipx_profiles_ext {
+    struct ipx_profile_tree *ptree;
+    uint8_t matches[]; 
+};
 
 struct ipx_pmatcher_result {
     uint64_t *channels;
@@ -70,21 +76,22 @@ union ipx_pevents_target {
 };
 
 struct ipx_pevents_ctx {
-    union {
-        struct ipx_profile *profile;
-        struct ipx_profile_channel *channel;
-    };
-    void *local;
-    void *global;
+    union ipx_pevents_target ptr;
+    struct {
+        void *local;
+        void *global;
+    } user;
 };
 
-typedef void ipx_pevents_create_cb(struct ipx_pevents_ctx *ctx);
+typedef void *ipx_pevents_create_cb(struct ipx_pevents_ctx *ctx);
 
 typedef void ipx_pevents_delete_cb(struct ipx_pevents_ctx *ctx);
 
 typedef void ipx_pevents_update_cb(struct ipx_pevents_ctx *ctx, union ipx_pevents_target old);
 
 typedef void ipx_pevents_data_cb(struct ipx_pevents_ctx *ctx, void *record);
+
+typedef void ipx_pevents_fn(struct ipx_pevents_ctx *ctx);
 
 struct ipx_pevents_cb_set {
     ipx_pevents_create_cb *on_create;
@@ -108,12 +115,21 @@ ipx_profiles_copy(struct ipx_profile_tree *profile_tree,
 IPX_API const char *
 ipx_profiles_get_xml_path();
 
+IPX_API const char *
+ipx_profiles_get_channel_path(struct ipx_profile_channel *channel);
+
+IPX_API size_t
+ipx_profiles_calc_ext_size(struct ipx_profile_tree *ptree);
+
+IPX_API struct ipx_pmatcher_result
+ipx_profiles_get_matches(struct ipx_profiles_ext *ext);
+
 IPX_API struct ipx_pmatcher *
 ipx_pmatcher_create(struct ipx_profile *live, fds_iemgr_t *iemgr);
 
 IPX_API void
 ipx_pmatcher_match(struct ipx_pmatcher *matcher, void *data,
-                     struct ipx_pmatcher_result result);
+                   struct ipx_pmatcher_result result);
 
 IPX_API void
 ipx_pmatcher_destroy(struct ipx_pmatcher *matcher);
@@ -123,8 +139,7 @@ ipx_pevents_create(struct ipx_pevents_cb_set profile_cbs,
                    struct ipx_pevents_cb_set channel_cbs);
 
 IPX_API int
-ipx_pevents_process(ipx_pevents_t *events, struct ipx_profile_tree *ptree, 
-                    struct ipx_pmatcher_result result, void *record);
+ipx_pevents_process(ipx_pevents_t *events, void *record, void *ext_data);
 
 IPX_API void
 ipx_pevents_destroy(ipx_pevents_t *events);
@@ -134,6 +149,9 @@ ipx_pevents_global_set(ipx_pevents_t *events, void *global);
 
 IPX_API void
 ipx_pevents_global_get(ipx_pevents_t *events);
+
+IPX_API void
+ipx_pevents_for_each(ipx_pevents_t *events, ipx_pevents_fn *prof_fn, ipx_pevents_fn *chan_fn);
 
 
 #ifdef __cplusplus

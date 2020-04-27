@@ -140,8 +140,10 @@ ipx_pmatcher_create(struct ipx_profile *live, fds_iemgr_t *iemgr)
 static inline bool
 source_matched(struct matcher_profile *prof, struct matcher_channel *chan)
 {
-    return prof->parent == NULL
-        || (prof->parent->matched_channels & chan->source_mask) == 0;
+    bool b = prof->parent == NULL
+        || (prof->parent->matched_channels & chan->source_mask) != 0;
+    //printf("XXXX: source %s match\n", b ? "does" : "doesn't");
+    return b;
 }
 
 /**
@@ -150,7 +152,9 @@ source_matched(struct matcher_profile *prof, struct matcher_channel *chan)
 static inline bool
 filter_passes(struct ipx_pmatcher *matcher, struct matcher_channel *chan)
 {
-    return fds_ipfix_filter_eval(chan->filter, matcher->aux.data);
+    bool b = fds_ipfix_filter_eval(chan->filter, matcher->aux.data);
+    //printf("XXXX: filter %s match\n", b ? "does" : "doesn't");
+    return b;
 }
 
 /**
@@ -168,17 +172,21 @@ match_profile(struct ipx_pmatcher *matcher, struct matcher_profile *prof)
             set_bit(&prof->matched_channels, i);
             set_bit(matcher->aux.result.channels, chan->bit_offset);
             any_match = true;
+            //printf("XXXX: matching channel %d:%d: yes\n", prof->bit_offset, chan->bit_offset);
         } else {
             clear_bit(&prof->matched_channels, i);
             clear_bit(matcher->aux.result.channels, chan->bit_offset);
+            //printf("XXXX: matching channel %d:%d: no\n", prof->bit_offset, chan->bit_offset);
         }
     }
 
     // if any of the channels matched then the profile matched too
     if (any_match) {
         set_bit(matcher->aux.result.profiles, prof->bit_offset);
+        //printf("XXXX: matching profile %d: yes\n", prof->bit_offset);
     } else {
         clear_bit(matcher->aux.result.profiles, prof->bit_offset);
+        //printf("XXXX: matching profile %d: no\n", prof->bit_offset);
     }
 
     // proceed to the children

@@ -67,6 +67,7 @@ destroy_profiles(struct ipx_profile *profile)
 {
     free(profile->name);
     free(profile->directory);
+    free(profile->path);
 
     for (size_t i = 0; i < profile->channels_cnt; i++) {
         struct ipx_profile_channel *channel = profile->channels[i];
@@ -364,6 +365,12 @@ add_subprofile(struct ipx_profile_tree *ptree, struct ipx_profile *profile)
     }
     *subprofile_ptr = subprofile;
 
+    subprofile->path = malloc(strlen(profile->path) + strlen(profile->name) + 2);
+    if (subprofile->path == NULL) {
+        // Do not free subprofile because it is already attached to the parent profile
+        return NULL;
+    }
+    sprintf(subprofile->path, "%s/%s", profile->path, profile->name);
     subprofile->parent = profile;
     subprofile->subprofile_idx = profile->subprofiles_cnt - 1;
     subprofile->bit_offset = ptree->profiles_cnt;
@@ -443,13 +450,19 @@ parse_profile(struct ipx_profile_tree *ptree, fds_xml_ctx_t *xml_ctx, struct ipx
             }
             break;
         
-        case PROFILE_DIRECTORY:
+        case PROFILE_DIRECTORY: {
             profile->directory = strdup(content->ptr_string);
             if (profile->directory == NULL) {
                 PROFILES_MEMORY_ERROR();
                 return IPX_ERR_NOMEM;
             }
+            // If the directory ends with trailing / remove it
+            size_t len = strlen(profile->directory);
+            if (len > 0 && profile->directory[len - 1] == '/') {
+                profile->directory[len - 1] = '\0';
+            }
             break;
+        }
         
         case PROFILE_CHANNEL_LIST: {
             int rc = parse_channel_list(ptree, content->ptr_ctx, profile);
@@ -469,6 +482,23 @@ parse_profile(struct ipx_profile_tree *ptree, fds_xml_ctx_t *xml_ctx, struct ipx
         
         }
     }
+
+    // Generate a directory from the parent directory if it wasn't explicitly set
+    // in the format `parent directory`/`this profile name`
+    if (profile->directory == NULL) {
+        if (profile->parent == NULL) {
+            PROFILES_ERROR("directory is required for live profile");
+            return IPX_ERR_FORMAT;
+        }
+
+        profile->directory = malloc(strlen(profile->parent->directory) + 1 + strlen(profile->name) + 1);
+        if (profile->directory == NULL) {
+            PROFILES_MEMORY_ERROR();
+            return IPX_ERR_NOMEM;
+        }
+
+        sprintf(profile->directory, "%s/%s", profile->parent->directory, profile->name);
+    } 
 
     return IPX_OK;
 }
@@ -509,7 +539,13 @@ create_profile_tree()
         free(ptree);
         return NULL;
     }
-
+    ptree->root->path = malloc(1);
+    if (ptree->root->path == NULL) {
+        free(ptree->root);
+        free(ptree);
+        return NULL;
+    }
+    ptree->root->path[0] = '\0';
     ptree->root->bit_offset = 0;
     ptree->profiles_cnt++;
 
@@ -522,6 +558,27 @@ create_profile_tree()
 static int
 copy_profile(struct ipx_profile_tree *ptree, struct ipx_profile *srcprof, struct ipx_profile *dstprof)
 {
+    // Copy attributes
+    dstprof->type = srcprof->type;
+    
+    dstprof->name = strdup(srcprof->name);
+    if (dstprof->name == NULL) {
+        PROFILES_MEMORY_ERROR();
+        return IPX_ERR_NOMEM;
+    }
+
+    dstprof->path = strdup(srcprof->path);
+    if (dstprof->path == NULL) {
+        PROFILES_MEMORY_ERROR();
+        return IPX_ERR_NOMEM;
+    }
+
+    dstprof->directory = strdup(srcprof->directory);
+    if (dstprof->directory == NULL) {
+        PROFILES_MEMORY_ERROR();
+        return IPX_ERR_NOMEM;
+    }
+
     // copy channels
     for (size_t i = 0; i < srcprof->channels_cnt; i++) {
         struct ipx_profile_channel *srcchan = srcprof->channels[i];
@@ -568,18 +625,7 @@ copy_profile(struct ipx_profile_tree *ptree, struct ipx_profile *srcprof, struct
         }
     }
 
-    // copy the remaining fields
-    dstprof->type = srcprof->type;
-    dstprof->name = strdup(srcprof->name);
-    if (dstprof->name == NULL) {
-        PROFILES_MEMORY_ERROR();
-        return IPX_ERR_NOMEM;
-    }
-    dstprof->directory = strdup(srcprof->directory);
-    if (dstprof->directory == NULL) {
-        PROFILES_MEMORY_ERROR();
-        return IPX_ERR_NOMEM;
-    }
+
     return IPX_OK;
 }
 
@@ -679,4 +725,21 @@ ipx_profiles_copy(struct ipx_profile_tree *profile_tree,
                   struct ipx_profile_tree **profile_tree_copy)
 {
     return copy_profile_tree(profile_tree, profile_tree_copy);
+}
+
+IPX_API size_t
+ipx_profiles_calc_ext_size(struct ipx_profile_tree *ptree)
+{
+    return sizeof(struct ipx_profiles_ext) 
+        + ((ptree->profiles_cnt + 63) / 64) * 8 
+        + ((ptree->channels_cnt + 63) / 64) * 8;
+}
+
+IPX_API struct ipx_pmatcher_result
+ipx_profiles_get_matches(struct ipx_profiles_ext *ext)
+{
+    return (struct ipx_pmatcher_result) {
+        .profiles = ext->matches,
+        .channels = ext->matches + ((ext->ptree->profiles_cnt + 63) / 64) * 8
+    };
 }
