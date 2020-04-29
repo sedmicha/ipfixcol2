@@ -1,7 +1,7 @@
 /**
- * \file src/plugins/output/json/src/Printer.cpp
+ * \file src/plugins/input/dummy/config.h
  * \author Lukas Hutak <lukas.hutak@cesnet.cz>
- * \brief Printer to standard output (source file)
+ * \brief Example parser of an XML configuration (header file)
  * \date 2018
  */
 
@@ -39,19 +39,40 @@
  *
  */
 
-#include "Printer.hpp"
-#include <iostream>
+#ifndef CONFIG_H
+#define CONFIG_H
 
-Printer::Printer(const struct cfg_print &cfg, ipx_ctx_t *ctx) : Output(cfg.name, ctx)
-{
-    // Nothing to do
-}
+#include <ipfixcol2.h>
+#include "stdint.h"
 
-int
-Printer::process(const char *str, size_t len)
-{
-    // The string is not NULL terminated
-    const std::string temp = {str, len};
-    printf("%s", temp.c_str());
-    return IPX_OK;
-}
+/** Configuration of a instance of the dummy plugin      */
+struct instance_config {
+    /** Observation Domain ID of generated messages      */
+    uint32_t odid;
+    /** Sleep time                                       */
+    struct timespec sleep_time;
+
+    /** Number of messages to generate before failure    */
+    unsigned int fail_after;
+    /** Type of failure (i.e. return code)               */
+    int fail_type;
+};
+
+/**
+ * \brief Parse configuration of the plugin
+ * \param[in] ctx    Instance context
+ * \param[in] params XML parameters
+ * \return Pointer to the parse configuration of the instance on success
+ * \return NULL if arguments are not valid or if a memory allocation error has occurred
+ */
+struct instance_config *
+config_parse(ipx_ctx_t *ctx, const char *params);
+
+/**
+ * \brief Destroy parsed configuration
+ * \param[in] cfg Parsed configuration
+ */
+void
+config_destroy(struct instance_config *cfg);
+
+#endif // CONFIG_H

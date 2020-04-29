@@ -257,6 +257,24 @@ IPX_API int
 ipx_ctx_term_cnt_set(ipx_ctx_t *ctx, unsigned int cnt);
 
 /**
+ * \brief Enable/disable data processing
+ *
+ * If disabled, the plugin is not allowed to process IPFIX and Session messages i.e. the
+ * getter (input plugins) or processing function (intermediate and output plugins) will not
+ * be called on a message arrival. Moreover, IPFIX and Session Messages will be dropped as
+ * the plugin cannot process them. Other message types (termination, garbage, etc) will be
+ * processed by the thread controller and automatically passed to the following plugin(s)
+ * - usually valid only for intermediate plugins.
+ *
+ * \note
+ *   By default, data processing is enabled.
+ * \param[in] ctx Plugin context
+ * \param[in] en  Enable/disable processing
+ */
+IPX_API void
+ipx_ctx_processing_set(ipx_ctx_t *ctx, bool en);
+
+/**
  * \brief Get registered extensions and dependencies
  *
  * \note
@@ -270,5 +288,13 @@ ipx_ctx_term_cnt_set(ipx_ctx_t *ctx, unsigned int cnt);
  */
 IPX_API void
 ipx_ctx_ext_defs(ipx_ctx_t *ctx, struct ipx_ctx_ext **arr, size_t *arr_size);
+
+/**
+ * @brief Get plugin description (name, version, etc.)
+ * @param[in] ctx Plugin context
+ * @return Pointer to the plugin info (loaded directly from the plugin)
+ */
+IPX_API const struct ipx_plugin_info *
+ipx_ctx_plugininfo_get(const ipx_ctx_t *ctx);
 
 #endif // IPFIXCOL_CONTEXT_INTERNAL_H
