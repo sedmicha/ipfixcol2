@@ -1,11 +1,11 @@
 /**
- * \file src/plugins/input/tcp/config.c
+ * \file src/plugins/input/fds/config.c
  * \author Lukas Hutak <lukas.hutak@cesnet.cz>
- * \brief Configuration parser of TCP input plugin (source file)
- * \date 2018
+ * \brief Configuration parser of FDS input plugin (source file)
+ * \date 2020
  */
 
-/* Copyright (C) 2018 CESNET, z.s.p.o.
+/* Copyright (C) 2020 CESNET, z.s.p.o.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -39,19 +39,24 @@
  *
  */
 
-#ifndef CONFIG_H
-#define CONFIG_H
+#ifndef FDS_CONFIG_H
+#define FDS_CONFIG_H
 
 #include <ipfixcol2.h>
 #include "stdint.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /** Configuration of a instance of the IPFIX plugin                                              */
-struct ipfix_config {
+struct fds_config {
     /** File pattern                                                                             */
     char *path;
-    /** Read buffer size                                                                         */
-    uint64_t bsize;
+    /** Size of IPFIX Messages to generate                                                       */
+    uint16_t msize;
+    /** Enable asynchronous I/O                                                                  */
+    bool async;
 };
 
 /**
@@ -61,7 +66,7 @@ struct ipfix_config {
  * @return Pointer to the parse configuration of the instance on success
  * @return NULL if arguments are not valid or if a memory allocation error has occurred
  */
-struct ipfix_config *
+struct fds_config *
 config_parse(ipx_ctx_t *ctx, const char *params);
 
 /**
@@ -69,6 +74,10 @@ config_parse(ipx_ctx_t *ctx, const char *params);
  * @param[in] cfg Parsed configuration
  */
 void
-config_destroy(struct ipfix_config *cfg);
+config_destroy(struct fds_config *cfg);
 
-#endif // CONFIG_H
+#ifdef __cplusplus
+}
+#endif
+
+#endif // FDS_CONFIG_H

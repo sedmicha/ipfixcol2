@@ -1,11 +1,11 @@
 /**
- * \file src/plugins/input/tcp/config.c
+ * \file src/plugins/input/fds/config.c
  * \author Lukas Hutak <lukas.hutak@cesnet.cz>
- * \brief Configuration parser of TCP input plugin (source file)
- * \date 2018
+ * \brief Configuration parser of FDS input plugin (source file)
+ * \date 2020
  */
 
-/* Copyright (C) 2018 CESNET, z.s.p.o.
+/* Copyright (C) 2020 CESNET, z.s.p.o.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -51,21 +51,24 @@
  * </params>
  */
 
-/** Default buffer size */
-#define BSIZE_DEF (1048576U)
-#define BSIZE_MIN  (131072U)
+/** Default message size */
+#define MSG_SIZE_DEF (32768U)
+/** Minimal message size */
+#define MSG_SIZE_MIN   (512U)
 
 /** XML nodes */
 enum params_xml_nodes {
     NODE_PATH = 1,
-    NODE_BSIZE
+    NODE_MSIZE,
+    NODE_ASYNCIO
 };
 
 /** Definition of the \<params\> node  */
 static const struct fds_xml_args args_params[] = {
     FDS_OPTS_ROOT("params"),
-    FDS_OPTS_ELEM(NODE_PATH, "path", FDS_OPTS_T_STRING, 0),
-    FDS_OPTS_ELEM(NODE_BSIZE, "bufferSize", FDS_OPTS_T_UINT, FDS_OPTS_P_OPT),
+    FDS_OPTS_ELEM(NODE_PATH,    "path",    FDS_OPTS_T_STRING, 0),
+    FDS_OPTS_ELEM(NODE_MSIZE,   "msgSize", FDS_OPTS_T_UINT, FDS_OPTS_P_OPT),
+    FDS_OPTS_ELEM(NODE_ASYNCIO, "asyncIO", FDS_OPTS_T_BOOL, FDS_OPTS_P_OPT),
     FDS_OPTS_END
 };
 
@@ -78,7 +81,7 @@ static const struct fds_xml_args args_params[] = {
  * \return #IPX_ERR_FORMAT in case of failure
  */
 static int
-config_parser_root(ipx_ctx_t *ctx, fds_xml_ctx_t *root, struct ipfix_config *cfg)
+config_parser_root(ipx_ctx_t *ctx, fds_xml_ctx_t *root, struct fds_config *cfg)
 {
     const struct fds_xml_cont *content;
     while (fds_xml_next(root, &content) != FDS_EOC) {
@@ -88,9 +91,22 @@ config_parser_root(ipx_ctx_t *ctx, fds_xml_ctx_t *root, struct ipfix_config *cfg
             assert(content->type == FDS_OPTS_T_STRING);
             cfg->path = strdup(content->ptr_string);
             break;
-        case NODE_BSIZE:
+        case NODE_MSIZE:
             assert(content->type == FDS_OPTS_T_UINT);
-            cfg->bsize = content->val_uint;
+            if (content->val_uint > UINT16_MAX) {
+                IPX_CTX_ERROR(ctx, "Message size must be at most %u bytes!",
+                    (unsigned int) UINT16_MAX);
+                return IPX_ERR_FORMAT;
+            } else if (content->val_uint < MSG_SIZE_MIN) {
+                IPX_CTX_ERROR(ctx, "Message size must be at least %u bytes!",
+                    (unsigned int) MSG_SIZE_MIN);
+                return IPX_ERR_FORMAT;
+            }
+            cfg->msize = (uint16_t) content->val_uint;
+            break;
+        case NODE_ASYNCIO:
+            assert(content->type == FDS_OPTS_T_BOOL);
+            cfg->async = content->val_bool;
             break;
         default:
             // Internal error
@@ -103,11 +119,6 @@ config_parser_root(ipx_ctx_t *ctx, fds_xml_ctx_t *root, struct ipfix_config *cfg
         return IPX_ERR_FORMAT;
     }
 
-    if (cfg->bsize < BSIZE_MIN) {
-        IPX_CTX_ERROR(ctx, "Buffer size must be at least %u bytes!" , (unsigned int) BSIZE_MIN);
-        return IPX_ERR_FORMAT;
-    }
-
     return IPX_OK;
 }
 
@@ -116,16 +127,17 @@ config_parser_root(ipx_ctx_t *ctx, fds_xml_ctx_t *root, struct ipfix_config *cfg
  * \param[in] cfg Configuration
  */
 static void
-config_default_set(struct ipfix_config *cfg)
+config_default_set(struct fds_config *cfg)
 {
     cfg->path = NULL;
-    cfg->bsize = BSIZE_DEF;
+    cfg->msize = MSG_SIZE_DEF;
+    cfg->async = true;
 }
 
-struct ipfix_config *
+struct fds_config *
 config_parse(ipx_ctx_t *ctx, const char *params)
 {
-    struct ipfix_config *cfg = calloc(1, sizeof(*cfg));
+    struct fds_config *cfg = calloc(1, sizeof(*cfg));
     if (!cfg) {
         IPX_CTX_ERROR(ctx, "Memory allocation error (%s:%d)", __FILE__, __LINE__);
         return NULL;
@@ -169,7 +181,7 @@ config_parse(ipx_ctx_t *ctx, const char *params)
 }
 
 void
-config_destroy(struct ipfix_config *cfg)
+config_destroy(struct fds_config *cfg)
 {
     free(cfg->path);
     free(cfg);
