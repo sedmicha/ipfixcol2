@@ -89,7 +89,6 @@ ipx_plugin_init(ipx_ctx_t *ipx_ctx, const char *params)
     }
 
     ipx_ctx_private_set(ipx_ctx, pctx);
-    
     return IPX_OK;
 }
 
@@ -123,12 +122,17 @@ ipx_plugin_process(ipx_ctx_t *ipx_ctx, void *data, ipx_msg_t *base_msg)
 
     // Get ipfix sets
     struct ipx_ipfix_set *sets;
-    int set_cnt;
+    size_t set_cnt;
     ipx_msg_ipfix_get_sets(orig_msg, &sets, &set_cnt);
 
+    IPX_CTX_DEBUG(ipx_ctx, "Processing IPFIX message (%d sets)", set_cnt);
+    
+    
     // Build new message
-    int drec_idx = 0;
-    for (int set_idx = 0; set_idx < set_cnt; set_idx++) {
+    size_t drec_idx = 0;
+    for (size_t set_idx = 0; set_idx < set_cnt; set_idx++) {
+        IPX_CTX_DEBUG(ipx_ctx, "Processing set %d", set_idx);
+
         struct ipx_ipfix_set set = sets[set_idx]; 
         uint16_t set_id = ntohs(set.ptr->flowset_id);
 
