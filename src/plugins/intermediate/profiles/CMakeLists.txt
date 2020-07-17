@@ -1,4 +1,6 @@
 add_library(profiles-intermediate MODULE
+    config.h
+    config.c
     profiles.c
 )
 

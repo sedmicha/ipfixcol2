@@ -59,7 +59,7 @@ struct ipx_pevents {
     void *global;
 };
 
-static const union ipx_pevents_target NULL_TARGET = (union ipx_pevents_target) {}; 
+// static const union ipx_pevents_target NULL_TARGET = (union ipx_pevents_target) {}; 
 
 /**
  * Walk the profiles tree and assign profile/channel pointers to their 

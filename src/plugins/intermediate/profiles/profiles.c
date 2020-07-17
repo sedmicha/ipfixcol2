@@ -1,5 +1,6 @@
 #include <ipfixcol2.h>
 #include <stdio.h>
+#include "config.h"
 
 IPX_API struct ipx_plugin_info ipx_plugin_info = {
     .type = IPX_PT_INTERMEDIATE,
@@ -14,6 +15,7 @@ struct plugin_data {
     struct ipx_profile_tree *ptree;
     ipx_pmatcher_t *pmatcher;
     ipx_ctx_ext_t *ext;
+    struct config *config;
 };
 
 
@@ -74,12 +76,17 @@ ipx_plugin_init(ipx_ctx_t *ipx_ctx, const char *params)
     }
     ipx_ctx_private_set(ipx_ctx, pd);
 
+    pd->config = config_parse(ipx_ctx, params);
+    if (pd->config == NULL) {
+        return IPX_ERR_NOMEM;
+    }
+
     // Parse profiles xml and build profile tree    
-    rc = ipx_profiles_parse_xml("/home/michal/Sync/work/playground/profiles.xml", &pd->ptree);
+    rc = ipx_profiles_parse_xml(pd->config->profiles_filename, &pd->ptree);
     if (rc != IPX_OK) {
         return rc;
     }
-    print_profiles(pd->ptree->root);
+    // print_profiles(pd->ptree->root);
 
     // Create matcher from the profile tree
     pd->pmatcher = ipx_pmatcher_create(pd->ptree->root, ipx_ctx_iemgr_get(ipx_ctx));
@@ -102,9 +109,10 @@ void
 ipx_plugin_destroy(ipx_ctx_t *ipx_ctx, void *data)
 {
     struct plugin_data *pd = data;  
-    ipx_pmatcher_destroy(pd->pmatcher);
-    ipx_profiles_destroy(pd->ptree);
-    free(pd);
+    //ipx_pmatcher_destroy(pd->pmatcher);
+    //ipx_profiles_destroy(pd->ptree);
+    //config_destroy(pd->config);
+    //free(pd);
 }
 
 static inline bool
