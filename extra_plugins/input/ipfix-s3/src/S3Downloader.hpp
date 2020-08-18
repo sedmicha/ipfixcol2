@@ -89,21 +89,21 @@ public:
     /// The size of the S3 object
     std::size_t size = 0;
 
-	/// Helper function for logging purposes ...
+    /// Helper function for logging purposes ...
     std::string
     get_filename() { return bucket + "/" + key; }
 
-	/// Read up to length number of bytes into data, will block until the specified length was read
-	/// or until the underlying stream was closed because of error or download cancelation.
+    /// Read up to length number of bytes into data, will block until the specified length was read
+    /// or until the underlying stream was closed because of error or download cancelation.
     std::size_t
     read(char *data, std::size_t length);
 
 private:
-	/// The manager managing this file
+    /// The manager managing this file
     S3Downloader *manager = nullptr;
 
-	/// Mutex to guard the part lists and offsets	
-	std::mutex mutex;    
+    /// Mutex to guard the part lists and offsets	
+    std::mutex mutex;    
 
     /// A offset the next downloaded part should begin from
     std::size_t download_part_offset = 0;
@@ -111,14 +111,14 @@ private:
     /// A offset the next read part should begin from
     std::size_t read_part_offset = 0;
 
-	/// Parts that are currently downloading
-	std::deque<std::shared_ptr<S3DownloadPart>> downloading_parts;
+    /// Parts that are currently downloading
+    std::deque<std::shared_ptr<S3DownloadPart>> downloading_parts;
 
     /// The queue of parts to read next
     std::deque<std::shared_ptr<S3DownloadPart>> parts_to_read;
 
-	/// The part currently being read
-	std::shared_ptr<S3DownloadPart> active_part;
+    /// The part currently being read
+    std::shared_ptr<S3DownloadPart> active_part;
 
     /// Indicates that the file download is cancelled
     std::atomic_bool cancel_flag { false };

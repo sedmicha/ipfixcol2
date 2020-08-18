@@ -439,9 +439,9 @@ ipx_plugin_destroy(ipx_ctx_t *ctx, void *cfg)
     if (data->cfg.stats) {
         printf("Statistics: \n%s\n", data->statistics.to_string().c_str());
     }
-	
-	data->s3->shutdown();
-	
+    
+    data->s3->shutdown();
+    
     S3Downloader::deinit_sdk();
 
     // Final cleanup

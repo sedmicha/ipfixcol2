@@ -97,13 +97,13 @@ S3Downloader::deinit_sdk()
 S3Downloader::S3Downloader(ipx_ctx_t *log_context, std::string hostname, std::string access_key, std::string secret_key, 
     bool use_virtual_paths, unsigned number_of_buffers, std::size_t part_size)
 :
-	log_context(log_context),
-	hostname(hostname),
-	access_key(access_key),
-	secret_key(secret_key),
-	use_virtual_paths(use_virtual_paths),
-	number_of_buffers(number_of_buffers),
-	part_size(part_size)
+    log_context(log_context),
+    hostname(hostname),
+    access_key(access_key),
+    secret_key(secret_key),
+    use_virtual_paths(use_virtual_paths),
+    number_of_buffers(number_of_buffers),
+    part_size(part_size)
 {
     // Create the client
     Aws::Auth::AWSCredentials credientals(access_key.c_str(), secret_key.c_str());
@@ -179,9 +179,9 @@ void
 S3Downloader::cancel_file_download_async(S3DownloadFile *file)
 {
     std::lock_guard<std::mutex> guard(mutex); 
-	IPX_CTX_INFO(log_context, "Cancelling download of file '%s' ...", file->get_filename().c_str());  
+    IPX_CTX_INFO(log_context, "Cancelling download of file '%s' ...", file->get_filename().c_str());  
     file->cancel_flag = true;
-	// Remove the file from the ready to download list
+    // Remove the file from the ready to download list
     ready_to_download.erase(std::remove(ready_to_download.begin(), ready_to_download.end(), file), ready_to_download.end());
 }
 
@@ -191,10 +191,10 @@ S3Downloader::download_next_file_part(S3DownloadFile *file)
     assert(file->download_part_offset < file->size);
     assert(!buffers.empty());
     assert(!file->cancel_flag);
-		
-	// The manager mutex should be locked at this point!
+        
+    // The manager mutex should be locked at this point!
 
-	std::lock_guard<std::mutex> guard(file->mutex);
+    std::lock_guard<std::mutex> guard(file->mutex);
 
     auto buffer = std::move(buffers.front());
     buffers.pop();
@@ -207,13 +207,13 @@ S3Downloader::download_next_file_part(S3DownloadFile *file)
     part->stream.reset(new MemStream(part->stream_buffer.get()));
 
     file->download_part_offset = part->to_byte;
-	file->downloading_parts.emplace_back(part);
-	file->parts_to_read.emplace_back(part);
-	
-	// If this is the first part of the file place the file in the downloads in progress list as it's not there yet
-	if (part->from_byte == 0) {
-		downloads_in_progress.emplace_back(file);	
-	}
+    file->downloading_parts.emplace_back(part);
+    file->parts_to_read.emplace_back(part);
+    
+    // If this is the first part of the file place the file in the downloads in progress list as it's not there yet
+    if (part->from_byte == 0) {
+        downloads_in_progress.emplace_back(file);	
+    }
 
     IPX_CTX_INFO(log_context, "Starting download of file %s part %lu-%lu", file->get_filename().c_str(), part->from_byte, part->to_byte);
 
@@ -238,34 +238,34 @@ S3Downloader::on_part_download_finished(S3DownloadFile *file, std::shared_ptr<S3
 {
     std::lock_guard<std::mutex> guard(mutex);
     std::lock_guard<std::mutex> file_guard(file->mutex);
-	
-	IPX_CTX_DEBUG(log_context, "In finished handler of file %s part %lu-%lu", file->get_filename().c_str(), part->from_byte, part->to_byte);
+    
+    IPX_CTX_DEBUG(log_context, "In finished handler of file %s part %lu-%lu", file->get_filename().c_str(), part->from_byte, part->to_byte);
 
-	// Remove the part from the downloading parts in the file
-	file->downloading_parts.erase(
+    // Remove the part from the downloading parts in the file
+    file->downloading_parts.erase(
         std::remove_if(file->downloading_parts.begin(), file->downloading_parts.end(),
-		    [&](std::shared_ptr<S3DownloadPart> &part_) { return part_.get() == part.get(); }
+            [&](std::shared_ptr<S3DownloadPart> &part_) { return part_.get() == part.get(); }
         ), file->downloading_parts.end()); 
 
-	IPX_CTX_DEBUG(log_context, "File has %lu more parts still downloading", file->downloading_parts.size()); 
+    IPX_CTX_DEBUG(log_context, "File has %lu more parts still downloading", file->downloading_parts.size()); 
 
-	// If all parts of the file are done downloading remove it from the downloads in progress list
-	if (file->downloading_parts.empty() && (file->download_part_offset == file->size || file->cancel_flag)) {
-		downloads_in_progress.erase(
+    // If all parts of the file are done downloading remove it from the downloads in progress list
+    if (file->downloading_parts.empty() && (file->download_part_offset == file->size || file->cancel_flag)) {
+        downloads_in_progress.erase(
             std::remove_if(downloads_in_progress.begin(), downloads_in_progress.end(), 
-			    [&](S3DownloadFile *file_) { return file_ == file; }
+                [&](S3DownloadFile *file_) { return file_ == file; }
             ), downloads_in_progress.end());
-		IPX_CTX_DEBUG(log_context, "Removed file from downloads in progress", '\0');
-	}
+        IPX_CTX_DEBUG(log_context, "Removed file from downloads in progress", '\0');
+    }
 
     if (file->cancel_flag) {
         // Download cancelled
         IPX_CTX_DEBUG(log_context, "Finished download of cancelled file '%s' part", file->get_filename().c_str());
         part->stream->close();
-		if (part->buffer.get() != nullptr) {
-			buffers.emplace(std::move(part->buffer));
-			dispatch_downloads();
-		}
+        if (part->buffer.get() != nullptr) {
+            buffers.emplace(std::move(part->buffer));
+            dispatch_downloads();
+        }
     } else {
         // Not cancelled
         part->stream->close_write();
@@ -277,7 +277,7 @@ S3Downloader::on_part_download_finished(S3DownloadFile *file, std::shared_ptr<S3
         }
     }
 
-	download_complete_cv.notify_all();
+    download_complete_cv.notify_all();
 }
 
 void
@@ -300,12 +300,12 @@ S3DownloadFile::read(char *data, std::size_t length)
         }
 
         if (!active_part) {
-			std::lock_guard<std::mutex> guard(mutex);
+            std::lock_guard<std::mutex> guard(mutex);
             if (read_part_offset < size) {
                 IPX_CTX_DEBUG(manager->log_context, "No active part in %s - getting next", get_filename().c_str());
-				assert(!parts_to_read.empty());
-				active_part = std::move(parts_to_read.front());
-				parts_to_read.pop_front();
+                assert(!parts_to_read.empty());
+                active_part = std::move(parts_to_read.front());
+                parts_to_read.pop_front();
                 read_part_offset = active_part->to_byte;
             } else {
                 IPX_CTX_DEBUG(manager->log_context, "No active part in %s - done and read %lu", get_filename().c_str(), total_read);
@@ -334,16 +334,16 @@ void
 S3Downloader::shutdown()
 {
     std::unique_lock<std::mutex> lock(mutex);
-	IPX_CTX_INFO(log_context, "S3Manager is shutting down ...");
-	// Cancel all downloads in progress and clear ready downloads
-	ready_to_download.clear();
-	for (auto file : downloads_in_progress) {
-		IPX_CTX_INFO(log_context, "Cancelling download of file '%s' ...", file->get_filename().c_str());  
-		file->cancel_flag = true;
-	}
-	// Wait for all the downloads to complete
-	while (!downloads_in_progress.empty()) {
-		IPX_CTX_INFO(log_context, "Waiting for downloads to finish (%d left) ...", downloads_in_progress.size());
-		download_complete_cv.wait(lock);
-	}
+    IPX_CTX_INFO(log_context, "S3Manager is shutting down ...");
+    // Cancel all downloads in progress and clear ready downloads
+    ready_to_download.clear();
+    for (auto file : downloads_in_progress) {
+        IPX_CTX_INFO(log_context, "Cancelling download of file '%s' ...", file->get_filename().c_str());  
+        file->cancel_flag = true;
+    }
+    // Wait for all the downloads to complete
+    while (!downloads_in_progress.empty()) {
+        IPX_CTX_INFO(log_context, "Waiting for downloads to finish (%d left) ...", downloads_in_progress.size());
+        download_complete_cv.wait(lock);
+    }
 }
