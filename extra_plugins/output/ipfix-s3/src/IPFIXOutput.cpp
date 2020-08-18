@@ -158,8 +158,7 @@ IPFIXOutput::close_file()
     output->close();
     if (config->stats) {
         statistics.stop_measure();
-        std::string s = statistics.to_string();
-        printf("Statistics: \n%s\n", s.c_str());
+        printf("Statistics: \n%s\n", (statistics.to_string()).c_str());
     }
     //int return_code = std::fclose(output_file);
     //if (return_code != 0) {
@@ -172,7 +171,7 @@ IPFIXOutput::close_file()
 
 /// Auxiliary data structure for callback function
 struct write_templates_aux {
-    S3Uploader *output;                  ///< Output manager
+    S3Uploader *output;                ///< Output manager
 
     uint32_t msg_odid;                 ///< IPFIX Message - ODID
     uint32_t msg_etime;                ///< IPFIX Message - Export Time
@@ -556,8 +555,7 @@ IPFIXOutput::~IPFIXOutput()
     output->close(true);
     if (config->stats) {
         statistics.stop_measure();
-        std::string s = statistics.to_string();
-        printf("Statistics: \n%s\n", s.c_str());
+        printf("Statistics: \n%s\n", statistics.to_string().c_str());
     }
 
     aws_sdk_deinit();

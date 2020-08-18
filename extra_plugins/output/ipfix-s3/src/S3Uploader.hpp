@@ -190,7 +190,7 @@ private:
     bool opened = false;
 
 public:
-    S3Uploader(const ipx_ctx_t *log_ctx, S3Config config, unsigned number_of_buffers = 20, std::size_t bytes_per_buffer = 5 * 1024 * 1024);
+    S3Uploader(const ipx_ctx_t *log_ctx, S3Config config, unsigned number_of_buffers = 30, std::size_t bytes_per_buffer = 5 * 1024 * 1024);
 
     void open(std::string name);
 

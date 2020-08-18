@@ -150,14 +150,16 @@ public:
         duration_t duration = measure_end - measure_start;
 
         std::stringstream ss;
-        if (measure_in_progress) {
-            ss << "    Total (cumulative): " << format_rate(total_bytes + bytes_this_measure, total_duration + duration);
-        } else {
-            ss << "    Total (cumulative): " << format_rate(total_bytes, total_duration);
-        }
-        ss << "\n    Last: " << format_rate(last_bytes, last_duration);
+
+        ss << "    Last: " << format_rate(last_bytes, last_duration);
         if (measure_in_progress) {
             ss << "\n    Current: " << format_rate(bytes_this_measure, duration);
+        }
+
+        if (measure_in_progress) {
+            ss << "\n    Total (cumulative): " << format_rate(total_bytes + bytes_this_measure, total_duration + duration);
+        } else {
+            ss << "\n    Total (cumulative): " << format_rate(total_bytes, total_duration);
         }
 
         duration_t duration_since_first = measure_end - first_measure_start;
@@ -166,6 +168,7 @@ public:
         } else {
             ss << "\n    Total (real): " << format_rate(total_bytes, duration_since_first);
         }
+
         return ss.str();
     }
 };
