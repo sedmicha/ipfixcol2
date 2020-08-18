@@ -10,13 +10,12 @@ add_library(ipfix-s3-output MODULE
     src/IPFIXOutput.hpp
     src/Config.cpp
     src/Config.hpp
-    src/S3Output.cpp
-    src/S3Output.hpp
+    src/S3Uploader.cpp
+    src/S3Uploader.hpp
     src/S3Common.cpp
     src/S3Common.hpp
     src/WrapperStream.hpp
     src/Statistics.hpp
-    src/BufferPool.hpp
 )
 
 # becuase of AWS SDK

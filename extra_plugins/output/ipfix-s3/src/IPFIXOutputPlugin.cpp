@@ -1,11 +1,11 @@
 /**
- * \file src/plugins/output/ipfix/IPFIXOutputPlugin.cpp
+ * \file extra_plugins/output/ipfix-s3/src/IPFIXOutputPlugin.cpp
  * \author Michal Sedlak <xsedla0v@stud.fit.vutbr.cz>
  * \brief Main file for IPFIX output plugin
- * \date 2019
+ * \date 2020
  */
 
-/* Copyright (C) 2019 CESNET, z.s.p.o.
+/* Copyright (C) 2020 CESNET, z.s.p.o.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions

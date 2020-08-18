@@ -1,11 +1,11 @@
 /**
- * \file src/plugins/output/ipfix/src/Config.cpp
+ * \file extra_plugins/output/ipfix-s3/src/Config.cpp
  * \author Michal Sedlak <xsedla0v@stud.fit.vutbr.cz>
  * \brief Config for IPFIX output plugin
- * \date 2019
+ * \date 2020
  */
 
-/* Copyright (C) 2019 CESNET, z.s.p.o.
+/* Copyright (C) 2020 CESNET, z.s.p.o.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -54,7 +54,8 @@ enum params_xml_nodes {
     PARAM_SPLIT_ON_EXPORT_TIME,
     PARAM_ACCESS_KEY,
     PARAM_SECRET_KEY,
-    PARAM_HOSTNAME
+    PARAM_HOSTNAME,
+    PARAM_STATS
 };
 
 /// Description of XML document
@@ -69,6 +70,7 @@ static const struct fds_xml_args args_params[] = {
     FDS_OPTS_ELEM(PARAM_ACCESS_KEY,           "accessKey",          FDS_OPTS_T_STRING, 0             ),
     FDS_OPTS_ELEM(PARAM_SECRET_KEY,           "secretKey",          FDS_OPTS_T_STRING, 0             ),
     FDS_OPTS_ELEM(PARAM_HOSTNAME,             "hostname",           FDS_OPTS_T_STRING, 0             ),
+    FDS_OPTS_ELEM(PARAM_STATS,                "stats",              FDS_OPTS_T_BOOL,   FDS_OPTS_P_OPT),
     FDS_OPTS_END
 };
 
@@ -82,6 +84,7 @@ void Config::set_defaults() {
     access_key = "";
     secret_key = "";
     hostname = "";
+    stats = false;
 }
 
 void Config::parse_params(fds_xml_ctx_t *params)
@@ -124,6 +127,10 @@ void Config::parse_params(fds_xml_ctx_t *params)
         case PARAM_HOSTNAME:
             assert(content->type == FDS_OPTS_T_STRING);
             hostname = std::string(content->ptr_string);
+            break;
+        case PARAM_STATS:
+            assert(content->type == FDS_OPTS_T_BOOL);
+            stats = content->val_bool;
             break;
         default:
             throw std::invalid_argument("Unexpected element within <params>!");

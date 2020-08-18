@@ -1,5 +1,5 @@
 /**
- * \file src/plugins/output/ipfix/src/IPFIXOutput.hpp
+ * \file extra_plugins/output/ipfix-s3/src/IPFIXOutput.hpp
  * \author Michal Sedlak <xsedla0v@stud.fit.vutbr.cz>
  * \brief IPFIX output plugin logic (header file)
  * \date 2019
@@ -42,7 +42,7 @@
 #define IPFIXOUTPUT_HPP
 
 #include "Config.hpp"
-#include "S3Output.hpp"
+#include "S3Uploader.hpp"
 #include "Statistics.hpp"
 
 #include <set>
@@ -80,7 +80,7 @@ private:
     /// Map of known Observation Domain IDs (ODIDs)
     std::map<uint32_t, odid_context_s> odid_contexts;
     /// Output manager
-    std::unique_ptr<S3Output> output;
+    std::unique_ptr<S3Uploader> output;
     /// Start time of the current file
     std::time_t file_start_time = 0;
 

@@ -1,11 +1,11 @@
 /**
- * \file src/plugins/output/ipfix/src/config.cpp
+ * \file extra_plugins/output/ipfix-s3/src/Config.hpp
  * \author Michal Sedlak <xsedla0v@stud.fit.vutbr.cz>
- * \brief Config for ipfix output plugin (header file)
- * \date 2019
+ * \brief Config for ipfix output plugin
+ * \date 2020
  */
 
-/* Copyright (C) 2019 CESNET, z.s.p.o.
+/* Copyright (C) 2020 CESNET, z.s.p.o.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -84,6 +84,8 @@ public:
     std::string secret_key;
     /// S3 server hostname
     std::string hostname;
+    /// Measure and print statistics
+    bool stats;
 
     /**
      * @brief Parse configuration of the IPFIX plugin

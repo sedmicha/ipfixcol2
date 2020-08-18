@@ -37,6 +37,9 @@ Example configuration
         <name>IPFIX output</name>
         <plugin>ipfix</plugin>
         <params>
+            <hostname> ... </hostname>
+            <accessKey> ... </accessKey>
+            <secretKey> ... </secretKey>
             <filename>/tmp/ipfix/%Y%m%d%H%M%S.ipfix</filename>
             <useLocalTime>false</useLocalTime>
             <windowSize>300</windowSize>
@@ -85,6 +88,18 @@ Parameters
     Warning: If the plugin receives flow records from multiple exporters at
     time the rotation could be unsteady. [default: false]
 
+:``hostname``:
+    The hostname of the S3 server
+
+:``accessKey``:
+    The access key used for the connection to the S3 server
+
+:``secretKey``:
+    The secret key used for the connection to the S3 server
+
+:``stats``:
+    Measure and print statistics such as the transfer speed.
+
 Note
 ----
 
@@ -98,3 +113,10 @@ record. This is necessary so each file can be used independently of the
 right now. However, there is a workaround - you can merge multiple IPFIX Files
 using cat tool e.g. ``cat file1.ipfix file2.ipfix > merge.ipfix`` and then use
 ``ipfixsend2 -i merge.ipfix`` to send data.
+
+Building
+--------
+
+This plugin depends on the AWS SDK for C++ available at: https://github.com/aws/aws-sdk-cpp
+
+If the AWS SDK for C++ isn't installed system-wide, set CMAKE_PREFIX_PATH to the install root of the SDK.

@@ -1,13 +1,54 @@
-#include "S3Output.hpp"
+/**
+ * \file extra_plugins/output/ipfix-s3/src/S3Uploader.cpp
+ * \author Michal Sedlak <xsedla0v@stud.fit.vutbr.cz>
+ * \brief S3 uploader
+ * \date 2020
+ */
+
+/* Copyright (C) 2020 CESNET, z.s.p.o.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in
+ *    the documentation and/or other materials provided with the
+ *    distribution.
+ * 3. Neither the name of the Company nor the names of its contributors
+ *    may be used to endorse or promote products derived from this
+ *    software without specific prior written permission.
+ *
+ * ALTERNATIVELY, provided that this notice is retained in full, this
+ * product may be distributed under the terms of the GNU General Public
+ * License (GPL) version 2 or later, in which case the provisions
+ * of the GPL apply INSTEAD OF those given above.
+ *
+ * This software is provided ``as is'', and any express or implied
+ * warranties, including, but not limited to, the implied warranties of
+ * merchantability and fitness for a particular purpose are disclaimed.
+ * In no event shall the company or contributors be liable for any
+ * direct, indirect, incidental, special, exemplary, or consequential
+ * damages (including, but not limited to, procurement of substitute
+ * goods or services; loss of use, data, or profits; or business
+ * interruption) however caused and on any theory of liability, whether
+ * in contract, strict liability, or tort (including negligence or
+ * otherwise) arising in any way out of the use of this software, even
+ * if advised of the possibility of such damage.
+ *
+ */
+
+#include "S3Uploader.hpp"
 #include "WrapperStream.hpp"
 
-S3Part::S3Part(S3MultipartUpload &upload, int part_number, std::shared_ptr<char []> data, std::size_t data_length)
+S3UploadPart::S3UploadPart(S3MultipartUpload &upload, int part_number, std::shared_ptr<char []> data, std::size_t data_length)
 : upload(upload), part_number(part_number), data(data), data_length(data_length)
 {
 }
 
 void
-S3Part::start_upload()
+S3UploadPart::start_upload()
 {
     Aws::S3::Model::UploadPartRequest request;
     request.SetKey(upload.key.c_str());
@@ -32,7 +73,7 @@ S3Part::start_upload()
 }
 
 void
-S3Part::upload_finished_handler(
+S3UploadPart::upload_finished_handler(
     const Aws::S3::S3Client *client,
     const Aws::S3::Model::UploadPartRequest &request, 
     const Aws::S3::Model::UploadPartOutcome &outcome,
@@ -58,7 +99,7 @@ S3Part::upload_finished_handler(
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-S3MultipartUpload::S3MultipartUpload(S3Output &manager, std::string bucket, std::string key)
+S3MultipartUpload::S3MultipartUpload(S3Uploader &manager, std::string bucket, std::string key)
 : manager(manager), bucket(bucket), key(key) 
 {
 }
@@ -105,7 +146,7 @@ void
 S3MultipartUpload::upload_part(std::shared_ptr<char []> data, std::size_t data_length)
 {
     std::lock_guard<std::recursive_mutex> guard(mutex);
-    parts.emplace_back(new S3Part(*this, ++part_counter, data, data_length));
+    parts.emplace_back(new S3UploadPart(*this, ++part_counter, data, data_length));
     if (!upload_id.empty()) {
         parts.back()->start_upload();
     }
@@ -117,7 +158,7 @@ S3MultipartUpload::complete_upload()
     std::lock_guard<std::recursive_mutex> guard(mutex);
 
     awaiting_complete = true;
-    if (!std::all_of(parts.begin(), parts.end(), [](std::unique_ptr<S3Part> &part) { return !part->etag.empty(); })) {
+    if (!std::all_of(parts.begin(), parts.end(), [](std::unique_ptr<S3UploadPart> &part) { return !part->etag.empty(); })) {
         IPX_CTX_INFO(manager.log_ctx, "S3MultipartUpload: Complete upload requested, but not all parts are done uploading yet ...", 0);
         return;
     }
@@ -204,13 +245,13 @@ S3MultipartUpload::wait_for_finish()
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-S3Output::S3Output(const ipx_ctx_t *log_ctx, S3Config config, unsigned number_of_buffers, std::size_t bytes_per_buffer)
+S3Uploader::S3Uploader(const ipx_ctx_t *log_ctx, S3Config config, unsigned number_of_buffers, std::size_t bytes_per_buffer)
 : log_ctx(log_ctx), client(config.make_aws_client()), buffer_capacity(bytes_per_buffer), buffer_pool(number_of_buffers, bytes_per_buffer)
 {
 }
 
 void
-S3Output::open(std::string name)
+S3Uploader::open(std::string name)
 {
     S3Uri uri = S3Uri::parse(name);
 
@@ -225,7 +266,7 @@ S3Output::open(std::string name)
 }
 
 void
-S3Output::write(const char *data, std::size_t data_length)
+S3Uploader::write(const char *data, std::size_t data_length)
 {
     if (!buffer) {
         IPX_CTX_INFO(log_ctx, "S3Output: Getting write buffer ...", 0);
@@ -252,7 +293,7 @@ S3Output::write(const char *data, std::size_t data_length)
 }
 
 void
-S3Output::close(bool blocking)
+S3Uploader::close(bool blocking)
 {
     if (!opened) {
         return;

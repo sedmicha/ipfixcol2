@@ -1,12 +1,12 @@
 /**
- * \file src/plugins/output/ipfix/src/IPFIXOutput.cpp
+ * \file sextra_plugins/output/ipfix-s3/src/IPFIXOutput.cpp
  * \author Michal Sedlak <xsedla0v@stud.fit.vutbr.cz>
  * \author Lukas Hutak <lukas.hutak@cesnet.cz>
  * \brief IPFIX output plugin logic
- * \date 2019
+ * \date 2020
  */
 
-/* Copyright (C) 2019 CESNET, z.s.p.o.
+/* Copyright (C) 2020 CESNET, z.s.p.o.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -133,7 +133,9 @@ IPFIXOutput::new_file(const std::time_t current_time)
 
     // Open the file for writing
     output->open(filename);
-    statistics.start_measure();
+    if (config->stats) {
+        statistics.start_measure();
+    }
 
     // Consider all Templates as undefined
     for (auto &odid_pair : odid_contexts) {
@@ -154,9 +156,11 @@ IPFIXOutput::close_file()
     }
 
     output->close();
-    statistics.stop_measure();
-    std::string s = statistics.to_string();
-    IPX_CTX_INFO(plugin_context, "Statistics: \n%s", s.c_str());
+    if (config->stats) {
+        statistics.stop_measure();
+        std::string s = statistics.to_string();
+        printf("Statistics: \n%s\n", s.c_str());
+    }
     //int return_code = std::fclose(output_file);
     //if (return_code != 0) {
     //    IPX_CTX_WARNING(plugin_context, "Error closing output file", '\0');
@@ -168,7 +172,7 @@ IPFIXOutput::close_file()
 
 /// Auxiliary data structure for callback function
 struct write_templates_aux {
-    S3Output *output;                  ///< Output manager
+    S3Uploader *output;                  ///< Output manager
 
     uint32_t msg_odid;                 ///< IPFIX Message - ODID
     uint32_t msg_etime;                ///< IPFIX Message - Export Time
@@ -203,7 +207,9 @@ write_template_dump(struct write_templates_aux &ctx)
 
     // Write the message to the file
     ctx.output->write(reinterpret_cast<const char *>(ctx.buffer), ctx.mem_used);
-    ctx.statistics->add_bytes(ctx.mem_used);
+    if (ctx.statistics) {
+        ctx.statistics->add_bytes(ctx.mem_used);
+    }
 }
 
 /**
@@ -300,7 +306,7 @@ IPFIXOutput::write_templates(const fds_tsnapshot_t *snap, uint32_t odid, uint32_
     cb_data.set_ptr = nullptr;
     cb_data.set_type = FDS_TYPE_TEMPLATE_UNDEF;
     cb_data.set_size = 0;
-    cb_data.statistics = &statistics;
+    cb_data.statistics = config->stats ? &statistics : nullptr;
 
     // Iterate over all valid (Options) Templates and write them to the file as IPFIX Messages
     fds_tsnapshot_for(snap, &write_templates_cb, (void *)&cb_data);
@@ -403,7 +409,9 @@ IPFIXOutput::on_ipfix_message(ipx_msg_ipfix *message)
     // If we don't have to look for unknown Data Sets, just copy the whole message -> FAST PATH
     if (config->preserve_original) {
         output->write(reinterpret_cast<const char *>(msg_hdr), msg_size);
-        statistics.add_bytes(msg_size);
+        if (config->stats) {
+            statistics.add_bytes(msg_size);
+        }
         return;
     }
 
@@ -471,7 +479,9 @@ IPFIXOutput::on_ipfix_message(ipx_msg_ipfix *message)
     odid_context->sequence_number += drec_cnt;
 
     output->write(reinterpret_cast<const char *>(buffer.get()), new_pos);
-    statistics.add_bytes(new_pos);
+    if (config->stats) {
+        statistics.add_bytes(new_pos);
+    }
 }
 
 /**
@@ -538,15 +548,17 @@ IPFIXOutput::IPFIXOutput(const Config *config, const ipx_ctx *ctx) : plugin_cont
     s3_config.access_key = config->access_key;
     s3_config.secret_key = config->secret_key;
     s3_config.hostname = config->hostname;
-    output.reset(new S3Output(ctx, s3_config));
+    output.reset(new S3Uploader(ctx, s3_config));
 }
 
 IPFIXOutput::~IPFIXOutput()
 {
     output->close(true);
-    statistics.stop_measure();
-    std::string s = statistics.to_string();
-    IPX_CTX_INFO(plugin_context, "Statistics: \n%s", s.c_str());
+    if (config->stats) {
+        statistics.stop_measure();
+        std::string s = statistics.to_string();
+        printf("Statistics: \n%s\n", s.c_str());
+    }
 
     aws_sdk_deinit();
 }
