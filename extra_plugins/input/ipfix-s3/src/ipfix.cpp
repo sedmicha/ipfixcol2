@@ -1,6 +1,7 @@
 /**
- * \file src/plugins/input/tcp/tcp.c
+ * \file extra_plugins/input/ipfix-s3/src/ipfix.cpp
  * \author Lukas Hutak <lukas.hutak@cesnet.cz>
+ * \author Michal Sedlak <xsedla0v@stud.fit.vutbr.cz>
  * \brief IPFIX File input plugin for IPFIXcol
  * \date 2020
  */
@@ -46,7 +47,7 @@
 #include <stdio.h>  // fopen, fclose
 
 #include "Config.hpp"
-#include "S3.hpp"
+#include "S3Downloader.hpp"
 #include "Statistics.hpp"
 
 /// Plugin description
@@ -72,19 +73,20 @@ struct plugin_data {
     /// Parsed plugin configuration
     Config cfg;
 
-    /// The input manager
-    std::unique_ptr<S3Manager> s3;
+    /// The downloader
+    std::unique_ptr<S3Downloader> s3;
     /// The list of files to read
-    std::vector<std::unique_ptr<S3File>> files;
+    std::vector<std::unique_ptr<S3DownloadFile>> files;
     /// Current file index
     std::size_t next_file_idx = 0;
     /// Handler of the currently file
-    S3File *current_file = nullptr;
+    S3DownloadFile *current_file = nullptr;
     /// Name/path of the current file
     const char *current_name = nullptr;
     /// Transport Session identification
     struct ipx_session *current_ts = nullptr;
 
+    /// The statistics counter
     Statistics statistics;
 
 };
@@ -204,7 +206,9 @@ session_close(ipx_ctx_t *ctx, struct ipx_session *session)
 static int
 next_file(struct plugin_data *data)
 {
-    printf("Statistics: \n%s\n", data->statistics.to_string().c_str());
+    if (data->cfg.stats) {
+        printf("Statistics: \n%s\n", data->statistics.to_string().c_str());
+    }
 
     // Signalize close of the current Transport Session
     session_close(data->ctx, data->current_ts);
@@ -216,7 +220,9 @@ next_file(struct plugin_data *data)
     data->current_file = data->files[data->next_file_idx].get();
     data->next_file_idx++;
     IPX_CTX_INFO(data->ctx, "Current file is %s", data->current_file->get_filename().c_str());
-    data->statistics.start_measure();
+    if (data->cfg.stats) {
+        data->statistics.start_measure();
+    }
 
     // Open new file
     // for (idx_next = data->file_next_idx; idx_next < idx_max; ++idx_next) {
@@ -252,7 +258,9 @@ next_file(struct plugin_data *data)
     // Signalize open of the new Transport Session
     data->current_ts = session_open(data->ctx, data->current_file->get_filename().c_str());
     if (!data->current_ts) {
-        data->statistics.stop_measure();
+        if (data->cfg.stats) {
+            data->statistics.stop_measure();
+        }
         // data->current_file->close();
         return IPX_ERR_NOMEM;
     }
@@ -290,7 +298,9 @@ next_message(struct plugin_data *data, ipx_msg_ipfix_t **msg)
 
     // Get the IPFIX Message header
     std::size_t bytes_read = data->current_file->read(reinterpret_cast<char *>(&ipfix_hdr), FDS_IPFIX_MSG_HDR_LEN);
-    data->statistics.add_bytes(bytes_read);
+    if (data->cfg.stats) {
+        data->statistics.add_bytes(bytes_read);
+    }
     IPX_CTX_DEBUG(data->ctx, "Read %lu bytes, want to read %d", bytes_read, FDS_IPFIX_MSG_HDR_LEN);
     if (bytes_read < FDS_IPFIX_MSG_HDR_LEN) {
         data->statistics.stop_measure();
@@ -324,10 +334,14 @@ next_message(struct plugin_data *data, ipx_msg_ipfix_t **msg)
         uint16_t size_remain = ipfix_size - FDS_IPFIX_MSG_HDR_LEN;
 
         std::size_t bytes_read = data->current_file->read(reinterpret_cast<char *>(data_ptr), size_remain);
-        data->statistics.add_bytes(bytes_read);
+        if (data->cfg.stats) {
+            data->statistics.add_bytes(bytes_read);
+        }
         // IPX_CTX_DEBUG(data->ctx, "Read %lu bytes, want to read %d", bytes_read, size_remain);
         if (bytes_read < size_remain) {
-            data->statistics.stop_measure();
+            if (data->cfg.stats) {
+                data->statistics.stop_measure();
+            }
             IPX_CTX_ERROR(data->ctx, "File '%s' is corrupted (unexpected end of file)!",
                 data->current_name);
             free(ipfix_data);
@@ -376,9 +390,9 @@ ipx_plugin_init(ipx_ctx_t *ctx, const char *params)
         return IPX_ERR_DENIED;
     }
 
-    S3Manager::init_sdk();
+    S3Downloader::init_sdk();
     
-    data->s3.reset(new S3Manager(ctx, data->cfg.hostname, data->cfg.access_key, data->cfg.secret_key,
+    data->s3.reset(new S3Downloader(ctx, data->cfg.hostname, data->cfg.access_key, data->cfg.secret_key,
         false, data->cfg.number_of_buffers, data->cfg.buffer_size));
 
     try {
@@ -416,15 +430,19 @@ ipx_plugin_destroy(ipx_ctx_t *ctx, void *cfg)
     // Close the current session and file
     session_close(ctx, data->current_ts);
     if (data->current_file) {
-        data->statistics.stop_measure();
+        if (data->cfg.stats) {
+            data->statistics.stop_measure();
+        }
         // data->current_file->close();
     }
 
-    printf("Statistics: \n%s\n", data->statistics.to_string().c_str());
+    if (data->cfg.stats) {
+        printf("Statistics: \n%s\n", data->statistics.to_string().c_str());
+    }
 	
 	data->s3->shutdown();
 	
-    S3Manager::deinit_sdk();
+    S3Downloader::deinit_sdk();
 
     // Final cleanup
     delete data;
@@ -478,13 +496,16 @@ ipx_plugin_session_close(ipx_ctx_t *ctx, void *cfg, const struct ipx_session *se
     // Close the current session and file
     session_close(ctx, data->current_ts);
     if (data->current_file) {
-        data->statistics.stop_measure();
+        if (data->cfg.stats) {
+            data->statistics.stop_measure();
+        }
         // data->current_file->close();
     }
 
     data->current_ts = NULL;
     data->current_file = NULL;
     data->current_name = NULL;
-
-    printf("Statistics: \n%s\n", data->statistics.to_string().c_str());
+    if (data->cfg.stats) {
+        printf("Statistics: \n%s\n", data->statistics.to_string().c_str());
+    }
 }

@@ -5,12 +5,12 @@ include(CMakeModules/install_dirs.cmake)
 
 # Create a linkable module
 add_library(ipfix-s3-input MODULE
-    ipfix.cpp
-    Config.hpp
-    Config.cpp
-    S3.hpp
-    S3.cpp
-    Statistics.hpp
+    src/ipfix.cpp
+    src/Config.hpp
+    src/Config.cpp
+    src/S3Downloader.hpp
+    src/S3Downloader.cpp
+    src/Statistics.hpp
 )
 
 # becuase of AWS SDK
