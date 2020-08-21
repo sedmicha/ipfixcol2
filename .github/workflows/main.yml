@@ -56,8 +56,11 @@ jobs:
       if: github.ref == 'refs/heads/master'
       run: git clone --branch master https://github.com/CESNET/libfds.git libfds_build
     - name: Checkout libfds library - devel branch
-      if: github.ref != 'refs/heads/master'
+      if: github.repository_owner != 'sedmicha' && github.ref != 'refs/heads/master'
       run: git clone --branch devel https://github.com/CESNET/libfds.git libfds_build
+    - name: Checkout libfds library - filter devel branch
+      if: github.repository_owner == 'sedmicha' && github.ref == 'refs/heads/devel'
+      run: git clone --branch filter-devel https://github.com/sedmicha/libfds.git libfds_build
     - name: Build and install libfds library
       working-directory: libfds_build
       run: |
