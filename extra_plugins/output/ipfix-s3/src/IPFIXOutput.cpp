@@ -66,7 +66,7 @@
 bool
 IPFIXOutput::should_start_new_file(std::time_t current_time)
 {
-    if (config->window_size == 0 && output->is_open()) {
+    if (config->window_size == 0 && output_file) {
         return false;
     }
 
@@ -82,7 +82,7 @@ void
 IPFIXOutput::new_file(const std::time_t current_time)
 {
     // Require (Options) Templates definitions to be added (only if this is not the first file)
-    bool add_tmplts = output->is_open();
+    bool add_tmplts = output_file != nullptr;
 
     // Close the previous file, if exists
     close_file();
@@ -132,7 +132,8 @@ IPFIXOutput::new_file(const std::time_t current_time)
     }
 
     // Open the file for writing
-    output->open(filename);
+	output_file.reset(new S3OutputFile(*uploader.get(), *buffer_pool.get()));
+	output_file->open(filename);
     if (config->stats) {
         statistics.start_measure();
     }
@@ -151,11 +152,11 @@ IPFIXOutput::new_file(const std::time_t current_time)
 void
 IPFIXOutput::close_file()
 {
-    if (!output->is_open()) {
+    if (!output_file) {
         return;
     }
 
-    output->close();
+    output_file->close();
     if (config->stats) {
         statistics.stop_measure();
         printf("Statistics: \n%s\n", (statistics.to_string()).c_str());
@@ -171,8 +172,6 @@ IPFIXOutput::close_file()
 
 /// Auxiliary data structure for callback function
 struct write_templates_aux {
-    S3Uploader *output;                ///< Output manager
-
     uint32_t msg_odid;                 ///< IPFIX Message - ODID
     uint32_t msg_etime;                ///< IPFIX Message - Export Time
     uint32_t msg_seqnum;               ///< IPFIX Message - Sequence number
@@ -185,6 +184,8 @@ struct write_templates_aux {
     uint16_t set_size;                 ///< Size of the current IPFIX Set
 
     Statistics *statistics;
+
+	S3OutputFile *output_file;
 };
 
 /**
@@ -205,7 +206,7 @@ write_template_dump(struct write_templates_aux &ctx)
     ctx.set_ptr->length = htons(ctx.set_size);
 
     // Write the message to the file
-    ctx.output->write(reinterpret_cast<const char *>(ctx.buffer), ctx.mem_used);
+    ctx.output_file->write(reinterpret_cast<const char *>(ctx.buffer), ctx.mem_used);
     if (ctx.statistics) {
         ctx.statistics->add_bytes(ctx.mem_used);
     }
@@ -296,7 +297,7 @@ IPFIXOutput::write_templates(const fds_tsnapshot_t *snap, uint32_t odid, uint32_
     uint32_t seq_num)
 {
     struct write_templates_aux cb_data;
-    cb_data.output = output.get();
+    cb_data.output_file = output_file.get();
     cb_data.msg_odid = odid;
     cb_data.msg_etime = exp_time;
     cb_data.msg_seqnum = seq_num;
@@ -407,7 +408,7 @@ IPFIXOutput::on_ipfix_message(ipx_msg_ipfix *message)
 
     // If we don't have to look for unknown Data Sets, just copy the whole message -> FAST PATH
     if (config->preserve_original) {
-        output->write(reinterpret_cast<const char *>(msg_hdr), msg_size);
+        output_file->write(reinterpret_cast<const char *>(msg_hdr), msg_size);
         if (config->stats) {
             statistics.add_bytes(msg_size);
         }
@@ -477,7 +478,7 @@ IPFIXOutput::on_ipfix_message(ipx_msg_ipfix *message)
     new_hdr->seq_num = htonl(odid_context->sequence_number);
     odid_context->sequence_number += drec_cnt;
 
-    output->write(reinterpret_cast<const char *>(buffer.get()), new_pos);
+    output_file->write(reinterpret_cast<const char *>(buffer.get()), new_pos);
     if (config->stats) {
         statistics.add_bytes(new_pos);
     }
@@ -543,16 +544,22 @@ IPFIXOutput::IPFIXOutput(const Config *config, const ipx_ctx *ctx) : plugin_cont
 
     buffer.reset(new uint8_t[UINT16_MAX]);
 
-    S3Config s3_config;
-    s3_config.access_key = config->access_key;
-    s3_config.secret_key = config->secret_key;
-    s3_config.hostname = config->hostname;
-    output.reset(new S3Uploader(ctx, s3_config));
+    S3ConnectionParams conn_params;
+    conn_params.access_key = config->access_key;
+    conn_params.secret_key = config->secret_key;
+    conn_params.hostname = config->hostname;
+
+    uploader.reset(new S3Uploader(ctx, conn_params));
+	
+	buffer_pool.reset(new BufferPool(30, 5 * 1024 * 1024));
 }
 
 IPFIXOutput::~IPFIXOutput()
 {
-    output->close(true);
+	if (output_file) {
+		output_file->close();
+	}
+	uploader->wait_for_finish();
     if (config->stats) {
         statistics.stop_measure();
         printf("Statistics: \n%s\n", statistics.to_string().c_str());

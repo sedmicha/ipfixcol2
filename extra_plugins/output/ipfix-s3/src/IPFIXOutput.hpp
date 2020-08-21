@@ -42,7 +42,7 @@
 #define IPFIXOUTPUT_HPP
 
 #include "Config.hpp"
-#include "S3Uploader.hpp"
+#include "S3.hpp"
 #include "Statistics.hpp"
 
 #include <set>
@@ -79,10 +79,12 @@ private:
     std::unique_ptr<uint8_t[]> buffer = nullptr;
     /// Map of known Observation Domain IDs (ODIDs)
     std::map<uint32_t, odid_context_s> odid_contexts;
-    /// Output manager
-    std::unique_ptr<S3Uploader> output;
     /// Start time of the current file
     std::time_t file_start_time = 0;
+
+	std::unique_ptr<BufferPool> buffer_pool;
+	std::unique_ptr<S3Uploader> uploader;
+	std::unique_ptr<S3OutputFile> output_file;
 
     Statistics statistics;
 

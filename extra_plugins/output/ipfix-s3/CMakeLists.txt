@@ -10,11 +10,8 @@ add_library(ipfix-s3-output MODULE
     src/IPFIXOutput.hpp
     src/Config.cpp
     src/Config.hpp
-    src/S3Uploader.cpp
-    src/S3Uploader.hpp
-    src/S3Common.cpp
-    src/S3Common.hpp
-    src/WrapperStream.hpp
+	src/S3.hpp
+	src/S3.cpp
     src/Statistics.hpp
 )
 
