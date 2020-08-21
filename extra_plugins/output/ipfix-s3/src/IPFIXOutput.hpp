@@ -82,9 +82,9 @@ private:
     /// Start time of the current file
     std::time_t file_start_time = 0;
 
-	std::unique_ptr<BufferPool> buffer_pool;
-	std::unique_ptr<S3Uploader> uploader;
-	std::unique_ptr<S3OutputFile> output_file;
+    std::unique_ptr<BufferPool> buffer_pool;
+    std::unique_ptr<S3Uploader> uploader;
+    std::unique_ptr<S3OutputFile> output_file;
 
     Statistics statistics;
 

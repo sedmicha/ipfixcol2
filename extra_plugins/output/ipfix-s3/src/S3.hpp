@@ -46,7 +46,7 @@ public:
     std::string hostname;
     std::string secret_key;
     std::string access_key;
-	bool use_virtual_paths = false;
+    bool use_virtual_paths = false;
 
     Aws::S3::S3Client make_aws_client();
 };
@@ -104,16 +104,16 @@ private:
     std::mutex mutex;
     std::condition_variable buffer_available;
     std::queue<std::unique_ptr<char []>> buffers;
-	std::size_t buffer_capacity;
+    std::size_t buffer_capacity;
 
 public:
     BufferPool(unsigned number_of_buffers, std::size_t buffer_capacity);
 
     std::unique_ptr<Buffer>
-	get();
+    get();
 
     void
-	put(std::unique_ptr<char []> buffer);
+    put(std::unique_ptr<char []> buffer);
 };
 
 class Buffer {
@@ -124,25 +124,25 @@ private:
     std::size_t capacity = 0;
 
 public:
-	Buffer() {}
+    Buffer() {}
 
-	Buffer(BufferPool &pool, std::unique_ptr<char []> buffer, std::size_t capacity)
-	: pool(&pool), buffer(std::move(buffer)), capacity(capacity) {}
+    Buffer(BufferPool &pool, std::unique_ptr<char []> buffer, std::size_t capacity)
+    : pool(&pool), buffer(std::move(buffer)), capacity(capacity) {}
 
-	bool
-	full() { return offset == capacity; }
-
-	std::size_t
-	get_written() { return offset; }
-
-	std::shared_ptr<WrapperStream>
-	wrap_to_read_stream();
+    bool
+    full() { return offset == capacity; }
 
     std::size_t
-	write(const char *data, std::size_t length);
+    get_written() { return offset; }
 
-	void
-	release();
+    std::shared_ptr<WrapperStream>
+    wrap_to_read_stream();
+
+    std::size_t
+    write(const char *data, std::size_t length);
+
+    void
+    release();
 };
 
 ///
@@ -160,7 +160,7 @@ struct S3Upload {
     std::string key;
     std::string upload_id;
     std::mutex mutex;
-	int part_counter = 0;
+    int part_counter = 0;
     std::deque<std::unique_ptr<S3UploadPart>> uploading_parts;
     std::deque<std::unique_ptr<S3UploadPart>> finished_parts;
     bool do_finish_flag = false;
@@ -168,43 +168,43 @@ struct S3Upload {
 
 class S3Uploader {
 private:
-	const ipx_ctx_t *log_context;
+    const ipx_ctx_t *log_context;
     Aws::S3::S3Client client;
     std::deque<std::unique_ptr<S3Upload>> uploads_in_progress;
-	std::condition_variable upload_completed_cv;	
-	std::mutex mutex;
+    std::condition_variable upload_completed_cv;    
+    std::mutex mutex;
 
 public:
-	S3Uploader(const ipx_ctx_t *log_context, S3ConnectionParams &conn_params)
-	: log_context(log_context), client(conn_params.make_aws_client()) {}
+    S3Uploader(const ipx_ctx_t *log_context, S3ConnectionParams &conn_params)
+    : log_context(log_context), client(conn_params.make_aws_client()) {}
 
     S3Upload *
-	begin_upload_async(std::string bucket, std::string key);
-
-	void
-	upload_part_async(S3Upload *upload, std::unique_ptr<Buffer> buffer);
+    begin_upload_async(std::string bucket, std::string key);
 
     void
-	finish_upload_async(S3Upload *upload);
+    upload_part_async(S3Upload *upload, std::unique_ptr<Buffer> buffer);
 
-	void
-	wait_for_finish();
+    void
+    finish_upload_async(S3Upload *upload);
+
+    void
+    wait_for_finish();
 
 private:
     void
-	do_upload_part(S3Upload *upload, S3UploadPart *part);
+    do_upload_part(S3Upload *upload, S3UploadPart *part);
 
     void
-	do_finish_upload(S3Upload *upload);
+    do_finish_upload(S3Upload *upload);
 
     void
-	begin_upload_callback(S3Upload *upload, const Aws::S3::Model::CreateMultipartUploadOutcome &outcome);
+    begin_upload_callback(S3Upload *upload, const Aws::S3::Model::CreateMultipartUploadOutcome &outcome);
 
     void
-	upload_part_callback(S3Upload *upload, S3UploadPart *part, const Aws::S3::Model::UploadPartOutcome &outcome);
+    upload_part_callback(S3Upload *upload, S3UploadPart *part, const Aws::S3::Model::UploadPartOutcome &outcome);
 
     void
-	finish_upload_callback(S3Upload *upload, const Aws::S3::Model::CompleteMultipartUploadOutcome &outcome);
+    finish_upload_callback(S3Upload *upload, const Aws::S3::Model::CompleteMultipartUploadOutcome &outcome);
 };
 
 ///
@@ -213,26 +213,26 @@ private:
 
 class S3OutputFile {
 private:
-	S3Uploader &uploader;
-	BufferPool &buffer_pool;
-	std::unique_ptr<Buffer> buffer;
-	S3Upload *upload;
+    S3Uploader &uploader;
+    BufferPool &buffer_pool;
+    std::unique_ptr<Buffer> buffer;
+    S3Upload *upload;
 
 public:
-	S3OutputFile(S3Uploader &uploader, BufferPool &buffer_pool)
-	: uploader(uploader), buffer_pool(buffer_pool) {}
+    S3OutputFile(S3Uploader &uploader, BufferPool &buffer_pool)
+    : uploader(uploader), buffer_pool(buffer_pool) {}
 
     void
-	open(std::string bucket, std::string key);
+    open(std::string bucket, std::string key);
 
-	void
-	open(std::string uri);
+    void
+    open(std::string uri);
 
     std::size_t
-	write(const char *data, std::size_t length);
+    write(const char *data, std::size_t length);
 
     void
-	close();
+    close();
 };
 
 #endif // S3_HPP

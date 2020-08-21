@@ -132,8 +132,8 @@ IPFIXOutput::new_file(const std::time_t current_time)
     }
 
     // Open the file for writing
-	output_file.reset(new S3OutputFile(*uploader.get(), *buffer_pool.get()));
-	output_file->open(filename);
+    output_file.reset(new S3OutputFile(*uploader.get(), *buffer_pool.get()));
+    output_file->open(filename);
     if (config->stats) {
         statistics.start_measure();
     }
@@ -185,7 +185,7 @@ struct write_templates_aux {
 
     Statistics *statistics;
 
-	S3OutputFile *output_file;
+    S3OutputFile *output_file;
 };
 
 /**
@@ -550,16 +550,16 @@ IPFIXOutput::IPFIXOutput(const Config *config, const ipx_ctx *ctx) : plugin_cont
     conn_params.hostname = config->hostname;
 
     uploader.reset(new S3Uploader(ctx, conn_params));
-	
-	buffer_pool.reset(new BufferPool(30, 5 * 1024 * 1024));
+    
+    buffer_pool.reset(new BufferPool(30, 5 * 1024 * 1024));
 }
 
 IPFIXOutput::~IPFIXOutput()
 {
-	if (output_file) {
-		output_file->close();
-	}
-	uploader->wait_for_finish();
+    if (output_file) {
+        output_file->close();
+    }
+    uploader->wait_for_finish();
     if (config->stats) {
         statistics.stop_measure();
         printf("Statistics: \n%s\n", statistics.to_string().c_str());
