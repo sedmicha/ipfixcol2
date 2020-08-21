@@ -579,8 +579,9 @@ ipx_pevents_for_each(ipx_pevents_t *pevents, ipx_pevents_fn *prof_fn, ipx_pevent
     if (prof_fn != NULL) {
         for (size_t i = 0; i < pevents->mapping.profiles_cnt; i++) {
             struct ipx_pevents_ctx ctx;
-            ctx.ptr.profile = mapping->profiles[i].ptr;
+            ctx.user.global = pevents->global;
             ctx.user.local = mapping->profiles[i].local;
+            ctx.ptr.profile = mapping->profiles[i].ptr;
             prof_fn(&ctx);
         }
     }
@@ -588,8 +589,9 @@ ipx_pevents_for_each(ipx_pevents_t *pevents, ipx_pevents_fn *prof_fn, ipx_pevent
     if (chan_fn != NULL) {
         for (size_t i = 0; i < pevents->mapping.channels_cnt; i++) {
             struct ipx_pevents_ctx ctx;
-            ctx.ptr.channel = mapping->channels[i].ptr;
+            ctx.user.global = pevents->global;
             ctx.user.local = mapping->channels[i].local;
+            ctx.ptr.channel = mapping->channels[i].ptr;
             chan_fn(&ctx);
         }
     }
