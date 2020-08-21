@@ -45,8 +45,11 @@ jobs:
       if: github.ref == 'refs/heads/master'
       run: git clone --branch master https://github.com/CESNET/libfds.git build/libfds_repo
     - name: Checkout libfds library - devel branch
-      if: github.ref != 'refs/heads/master'
+      if: github.ref != 'refs/heads/master' && github.ref != 'refs/heads/sedlak-filter'
       run: git clone --branch devel https://github.com/CESNET/libfds.git build/libfds_repo
+    - name: Checkout libfds library - filter devel branch
+      if: github.ref == 'refs/heads/sedlak-filter'
+      run: git clone --branch sedlak-filter https://github.com/sedmicha/libfds.git build/libfds_repo
     - name: Build DEBs of libfds library and install them
       working-directory: 'build/libfds_repo'
       run: |

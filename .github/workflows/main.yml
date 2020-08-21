@@ -60,7 +60,7 @@ jobs:
       run: git clone --branch devel https://github.com/CESNET/libfds.git libfds_build
     - name: Checkout libfds library - filter devel branch
       if: github.ref == 'refs/heads/sedlak-filter'
-      run: git clone --branch filter-devel https://github.com/sedmicha/libfds.git libfds_build
+      run: git clone --branch sedlak-filter https://github.com/sedmicha/libfds.git libfds_build
     - name: Build and install libfds library
       working-directory: libfds_build
       run: |
