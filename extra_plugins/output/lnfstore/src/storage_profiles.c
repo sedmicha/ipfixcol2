@@ -4,7 +4,7 @@
  * \author Michal Sedlak <xsedla0v@stud.fit.vutbr.cz>
  * \brief Profile storage management (source file)
  *
- * Copyright (C) 2015, 2016 CESNET, z.s.p.o.
+ * Copyright (C) 2020 CESNET, z.s.p.o.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
