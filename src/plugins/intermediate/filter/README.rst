@@ -45,6 +45,7 @@ IPFIX field identificators
 IPFIX fields can be identified using their name specified in the IPFIX information elements table or their alias defined in the `aliases.xml` file.
 If the IPFIX name is used and the default iana table is being referred, the `iana:` prefix can be ommited. 
 Note that one alias can point to multiple IPFIX information elements.
+The default location of the aliases file is `/etc/libfds/system/aliases.xml`.
 
 
 Value mappings
@@ -52,6 +53,7 @@ Value mappings
 
 Commonly used values can be mapped to a name using the `mappings.xml` file, for example the name `http` when used in an expression `port http` can refer to the value 80.
 These names can have different meanings depending on the IPFIX field they're being compared with. 
+The default location of the mappings file is `/etc/libfds/system/mappings.xml`.
 
 
 Example configuration
