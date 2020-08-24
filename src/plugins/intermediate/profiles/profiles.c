@@ -109,10 +109,10 @@ void
 ipx_plugin_destroy(ipx_ctx_t *ipx_ctx, void *data)
 {
     struct plugin_data *pd = data;  
-    //ipx_pmatcher_destroy(pd->pmatcher);
-    //ipx_profiles_destroy(pd->ptree);
-    //config_destroy(pd->config);
-    //free(pd);
+    ipx_pmatcher_destroy(pd->pmatcher);
+    ipx_profiles_destroy(pd->ptree);
+    config_destroy(pd->config);
+    free(pd);
 }
 
 static inline bool
@@ -134,8 +134,8 @@ ipx_plugin_process(ipx_ctx_t *ipx_ctx, void *data, ipx_msg_t *base_msg)
 
     ipx_msg_ipfix_t *msg = ipx_msg_base2ipfix(base_msg);
 
-    size_t profiles_bytes_cnt = pd->ptree->profiles_cnt + 63 / 64 * 8;
-    size_t channels_bytes_cnt = pd->ptree->channels_cnt + 63 / 64 * 8;
+    size_t profiles_bytes_cnt = (pd->ptree->profiles_cnt + 63) / 64;
+    size_t channels_bytes_cnt = (pd->ptree->channels_cnt + 63) / 64;
     uint8_t *bytes = malloc(sizeof(struct ipx_profiles_tree *) + profiles_bytes_cnt + channels_bytes_cnt);
     *((struct ipx_profiles_tree **) bytes) = pd->ptree;
 
@@ -161,28 +161,6 @@ ipx_plugin_process(ipx_ctx_t *ipx_ctx, void *data, ipx_msg_t *base_msg)
         // Fill it out with matches
         struct ipx_pmatcher_result match_result = ipx_profiles_get_matches(ext_data);
         ipx_pmatcher_match(pd->pmatcher, &rec->rec, match_result);
-
-        //printf("XXXX: match result:\n");
-        //printf("XXXX: profiles ");
-        //for (int i = 0; i < ext_data->ptree->profiles_cnt; i++) {
-        //    if (test_bit(match_result.profiles, i)) {
-        //        printf("1");
-        //    } else {
-        //        printf("0");
-        //    }
-        //}
-        //printf("\n");
-
-        //printf("XXXX: channels ");
-        //for (int i = 0; i < ext_data->ptree->channels_cnt; i++) {
-        //    if (test_bit(match_result.channels, i)) {
-        //        printf("1");
-        //    } else {
-        //        printf("0");
-        //    }
-        //}
-        //printf("\n");
-
         ipx_ctx_ext_set_filled(pd->ext, rec);
     }
 
