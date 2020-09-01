@@ -40,7 +40,7 @@
  */
 
 #include "Config.hpp"
-#include "PrinterOutput.cpp"
+#include "PrinterOutput.hpp"
 
 #include <ipfixcol2.h>
 
@@ -89,9 +89,9 @@ int
 ipx_plugin_process(ipx_ctx_t *ctx, void *private_data, ipx_msg_t *msg)
 {
     try {
-        auto *table_output = static_cast<PrinterOutput *>(private_data);
+        auto *printer_output = static_cast<PrinterOutput *>(private_data);
         if (ipx_msg_get_type(msg) == IPX_MSG_IPFIX) {
-            table_output->on_ipfix_message(ipx_msg_base2ipfix(msg));
+            printer_output->on_ipfix_message(ipx_msg_base2ipfix(msg));
         }
         return IPX_OK;
     } catch (std::exception &ex) {
