@@ -16,3 +16,11 @@ docker run -p 4739:4739/udp ipfixcol2
 ```
 
 IPFIXcol2 will be started using the prepared config file. UDP port 4739 will be forwarded from the host machine to the running instance for sending data to the collector. 
+
+## S3 input/output plugins
+
+Support for S3 input/output plugins is provided in an additional Dockerfile because the plugins are currently only available in an experimental branch.
+To use it, build the docker image using the following command:
+```
+docker build -t ipfixcol2 -f Dockerfile_s3 .
+```
