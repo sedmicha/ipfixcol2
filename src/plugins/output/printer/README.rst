@@ -1,4 +1,4 @@
-Viewer (output plugin)
+Printer (output plugin)
 =====================
 
 This plugin prints Data Records in IPFIX Messages to the standard output in a format specified by 
