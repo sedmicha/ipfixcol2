@@ -1,7 +1,7 @@
 /**
- * \file src/plugins/output/printer/src/Config.hpp
+ * \file src/plugins/output/printer/src/Utils.cpp
  * \author Michal Sedlak <xsedla0v@stud.fit.vutbr.cz>
- * \brief Printer plugin configuration header
+ * \brief Printer utils
  * \date 2020
  */
 
@@ -39,49 +39,13 @@
  *
  */
 
-#ifndef IPFIXCOL2_PRINTER_CONFIG_HPP
-#define IPFIXCOL2_PRINTER_CONFIG_HPP
+#include "Utils.hpp"
 
-#include "Printer.hpp"
-
-#include <memory>
-#include <vector>
-#include <stdexcept>
-#include <string>
-
-#include <ipfixcol2.h>
-#include <libfds.h>
-
-class Config {
-public:
-    std::string format;
-    PrinterOptions printer_opts;
-
-    Config() {}
-
-    Config(const char *xml_str);
-
-private:
-    struct Node {
-        enum : int {
-            format = 1,
-            scaleNumbers,
-            shortenIPv6Addresses,
-            useLocalTime,
-            splitBiflow,
-            markBiflow,
-            escapeMode,
-            translateAddresses,
-            translateProtocols,
-            translatePorts,
-            translateTCPFlags
-        };
-    };
-
-    static const struct fds_xml_args args_params[];
-    
-    void
-    parse_root(fds_xml_ctx_t *);
+const std::map<uint8_t, const char *> Protocol::protocols = {
+#   include "protocols.inc"
 };
 
-#endif // IPFIXCOL2_PRINTER_CONFIG_HPP
+const std::map<uint16_t, const char *> Service::services = {
+#   include "services.inc"
+};
+

@@ -1,10 +1,15 @@
 # Create a linkable module
 
 add_library(printer-output MODULE
+    src/Plugin.cpp
     src/Config.hpp
     src/Config.cpp
-    src/PrinterOutput.cpp
-    src/Plugin.cpp
+    src/Printer.hpp
+    src/Printer.cpp
+    src/LineBuilder.hpp
+    src/LineBuilder.cpp
+    src/Utils.hpp
+    src/Utils.cpp
 )
 
 install(

@@ -1,7 +1,7 @@
 /**
- * \file src/plugins/output/printer/PrinterOutput.hpp
+ * \file src/plugins/output/printer/src/Utils.hpp
  * \author Michal Sedlak <xsedla0v@stud.fit.vutbr.cz>
- * \brief Printer output implementation
+ * \brief Printer utils header
  * \date 2020
  */
 
@@ -39,47 +39,83 @@
  *
  */
 
-#ifndef PRINTEROUTPUT_HPP
-#define PRINTEROUTPUT_HPP
+#ifndef IPFIXCOL2_PRINTER_UTILS_HPP
+#define IPFIXCOL2_PRINTER_UTILS_HPP
 
-#include "Config.hpp"
-#include "WriterBuilder.hpp"
-#include "Writer.hpp"
+#include <map>
+#include <string>
+#include <cstring>
 
-#include <ipfixcol2.h>
+#include <sys/socket.h>
+#include <netdb.h>
 
-class PrinterOutput {
+class Service {
 public:
-    PrinterOutput(ipx_ctx_t *plugin_context, Config config)
-        : plugin_context(plugin_context)
-        , config(config)
+    static const char *
+    get_name(uint16_t port)
     {
-        auto *iemgr = ipx_ctx_iemgr_get(plugin_context);
-        WriterBuilder builder;
-        builder.set_format(config.format);
-        builder.set_iemgr(iemgr);
-        builder.set_scale_numbers(true);
-        builder.set_shorten_ipv6_addresses(true);
-        writer = std::move(builder.build());
-
-        writer.write_header();
-    }
-
-    void
-    on_ipfix_message(ipx_msg_ipfix_t *message)
-    {
-        uint32_t drec_count = ipx_msg_ipfix_get_drec_cnt(message);
-        for (uint32_t i = 0; i < drec_count; i++) {
-            auto *drec = ipx_msg_ipfix_get_drec(message, i);
-            writer.write_record(&drec->rec);            
+        auto p = services.find(port);
+        if (p != services.end()) {
+            return p->second;
+        } else {
+            return nullptr;
         }
     }
 
 private:
-    ipx_ctx_t *plugin_context;
-    Config config;
-    Writer writer;
+    static const std::map<uint16_t, const char *> services;
+};
+
+class Protocol {
+public:
+    static const char *
+    get_name(uint16_t number)
+    {
+        auto p = protocols.find(number);
+        if (p != protocols.end()) {
+            return p->second;
+        } else {
+            return nullptr;
+        }
+    }
+
+private:
+    static const std::map<uint8_t, const char *> protocols;
+};
+
+class ReverseDNS {
+public:
+    static std::string
+    lookup_ipv4(uint8_t *addr)
+    {
+        return lookup<sockaddr_in, AF_INET, 4>(addr);
+    }
+
+    static std::string
+    lookup_ipv6(uint8_t *addr)
+    {
+        return lookup<sockaddr_in6, AF_INET6, 6>(addr);
+    }
+
+private:
+    template <typename sockaddr_type, int addr_family, int addr_len> 
+    static std::string
+    lookup(uint8_t *addr)
+    {
+        static constexpr size_t host_size = 1024;
+        std::string host;
+        host.resize(host_size);
+        sockaddr_in sa;
+        sa.sin_family = addr_family;
+        std::memcpy(&sa.sin_addr, addr, addr_len);
+        int rc = getnameinfo(reinterpret_cast<sockaddr *>(&sa), sizeof(sockaddr_type), &host[0], host.size(), nullptr, 0, 0);
+        if (rc != 0) {
+            return "";
+        }
+        host.resize(std::strlen(&host[0]));
+        return host;
+    }
 
 };
 
-#endif // PRINTEROUTPUT_HPP
+#endif // IPFIXCOL2_PRINTER_UTILS_HPP

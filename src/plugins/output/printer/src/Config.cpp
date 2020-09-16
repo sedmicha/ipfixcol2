@@ -1,7 +1,7 @@
 /**
  * \file src/plugins/output/printer/src/Config.cpp
  * \author Michal Sedlak <xsedla0v@stud.fit.vutbr.cz>
- * \brief Config for printer output plugin
+ * \brief Printer plugin configuration
  * \date 2020
  */
 
@@ -40,12 +40,45 @@
  */
 
 #include "Config.hpp"
+#include "Printer.hpp"
+
+#include <algorithm>
+#include <string>
+
+/**
+ * <params>
+ *  <format></format>
+ *  <scaleNumbers></scaleNumbers>
+ *  <shortenIPv6Addresses></shortenIPv6Addresses>
+ *  <useLocalTime>true</useLocalTime>
+ *  <splitBiflow></splitBiflow>
+ *  <markBiflow></markBiflow>
+ *  <escapeMode></escapeMode>
+ *  <translateAddresses></translateAddresses>
+ * </params>
+ */
 
 const struct fds_xml_args Config::args_params[] = {
     FDS_OPTS_ROOT("params"),
-    FDS_OPTS_ELEM(Config::FORMAT, "format", FDS_OPTS_T_STRING, 0),
+    FDS_OPTS_ELEM(Node::format              , "format"              , FDS_OPTS_T_STRING, 0             ),
+    FDS_OPTS_ELEM(Node::scaleNumbers        , "scaleNumbers"        , FDS_OPTS_T_BOOL  , FDS_OPTS_P_OPT),
+    FDS_OPTS_ELEM(Node::shortenIPv6Addresses, "shortenIPv6Addresses", FDS_OPTS_T_BOOL  , FDS_OPTS_P_OPT),
+    FDS_OPTS_ELEM(Node::useLocalTime        , "useLocalTime"        , FDS_OPTS_T_BOOL  , FDS_OPTS_P_OPT),
+    FDS_OPTS_ELEM(Node::splitBiflow         , "splitBiflow"         , FDS_OPTS_T_BOOL  , FDS_OPTS_P_OPT),
+    FDS_OPTS_ELEM(Node::markBiflow          , "markBiflow"          , FDS_OPTS_T_BOOL  , FDS_OPTS_P_OPT),
+    FDS_OPTS_ELEM(Node::escapeMode          , "escapeMode"          , FDS_OPTS_T_STRING, FDS_OPTS_P_OPT),
+    FDS_OPTS_ELEM(Node::translateAddresses  , "translateAddresses"  , FDS_OPTS_T_BOOL  , FDS_OPTS_P_OPT),
+    FDS_OPTS_ELEM(Node::translateProtocols  , "translateProtocols"  , FDS_OPTS_T_BOOL  , FDS_OPTS_P_OPT),
+    FDS_OPTS_ELEM(Node::translatePorts      , "translatePorts"      , FDS_OPTS_T_BOOL  , FDS_OPTS_P_OPT),
+    FDS_OPTS_ELEM(Node::translateTCPFlags   , "translateTCPFlags"   , FDS_OPTS_T_BOOL  , FDS_OPTS_P_OPT),
     FDS_OPTS_END
 };
+
+static void
+to_lowercase(std::string &s)
+{
+    std::for_each(s.begin(), s.end(), [](char &c) { c = std::tolower(c); });
+}
 
 Config::Config(const char *xml_str)
 {
@@ -63,18 +96,60 @@ Config::Config(const char *xml_str)
     parse_root(root);
 }
 
-
 void
 Config::parse_root(fds_xml_ctx_t *xml_node)
 {
     const struct fds_xml_cont *content;
     while (fds_xml_next(xml_node, &content) != FDS_EOC) {
         switch (content->id) {
-        case Config::FORMAT:
+        case Node::format:
             format = std::string(content->ptr_string);
-            break;                    
+            break;
+        case Node::scaleNumbers:
+            printer_opts.scale_numbers = content->val_bool;
+            break;
+        case Node::shortenIPv6Addresses:
+            printer_opts.shorten_ipv6 = content->val_bool;
+            break;
+        case Node::useLocalTime:
+            printer_opts.use_localtime = content->val_bool;
+            break;
+        case Node::splitBiflow:
+            printer_opts.split_biflow = content->val_bool;
+            break;
+        case Node::markBiflow:
+            printer_opts.mark_biflow = content->val_bool;
+            break;
+        case Node::translateAddresses:
+            printer_opts.translate_addrs = content->val_bool;
+            break;
+        case Node::translateProtocols:
+            printer_opts.translate_protocols = content->val_bool;
+            break;
+        case Node::translatePorts:
+            printer_opts.translate_ports = content->val_bool;
+            break;
+        case Node::translateTCPFlags:
+            printer_opts.translate_tcp_flags = content->val_bool;
+            break;
+        case Node::escapeMode: {
+            std::string val { content->ptr_string };
+            to_lowercase(val);
+            if (val == "normal") {
+                printer_opts.escape_mode = EscapeMode::Normal;
+            } else if (val == "csv") {
+                printer_opts.escape_mode = EscapeMode::Csv;
+            } else {
+                throw std::invalid_argument("Invalid value for option 'escapeMode'."
+                    " Valid values are: 'normal' (default), 'csv'.");
+            }
+            } break;
         default:
             assert(false);
         }
+    }
+    
+    if (printer_opts.mark_biflow && !printer_opts.split_biflow) {
+        throw std::invalid_argument("Cannot mark biflow when split biflow is false.");
     }
 }
