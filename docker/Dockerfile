@@ -1,6 +1,6 @@
 FROM debian:stable
 
-MAINTAINER Michal Sedlak <xsedla0v@stud.fit.vutbr.cz>
+LABEL author="Michal Sedlak <xsedla0v@stud.fit.vutbr.cz>"
 
 RUN apt-get update && apt-get install -y \
 	build-essential \
@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y \
 	docutils-common \
 	autoconf \
 	automake \
+	pkg-config \
 	libtool \
 	libxml2-dev \
 	liblz4-dev \
@@ -20,18 +21,51 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /root/
 
 RUN git clone https://github.com/CESNET/libfds
-RUN mkdir libfds-build && cd libfds-build && cmake ../libfds -DCMAKE_BUILD_TYPE=Debug && make && make install
+RUN mkdir libfds-build \
+	&& cd libfds-build \
+	&& cmake ../libfds -DCMAKE_BUILD_TYPE=Debug \
+	&& make \
+	&& make install
 
 RUN wget http://libnf.net/packages/libnf-1.25.tar.gz
-RUN tar -xzf ./libnf-1.25.tar.gz && cd libnf-1.25 && ./configure && make && make install
+RUN tar -xzf ./libnf-1.25.tar.gz \
+	&& cd libnf-1.25 \
+	&& ./configure \
+	&& make \
+	&& make install
 
 RUN git clone https://github.com/CESNET/bloom-filter-index.git
-RUN cd bloom-filter-index && ./bootstrap.sh && ./configure && make && make install
+RUN cd bloom-filter-index \
+	&& ./bootstrap.sh \
+	&& ./configure \
+	&& make \
+	&& make install
+
+RUN git clone https://github.com/CESNET/Nemea-Framework
+RUN cd Nemea-Framework \
+	&& ./bootstrap.sh \
+	&& ./configure \
+	&& make \
+	&& make install
 
 RUN git clone https://github.com/CESNET/ipfixcol2
-RUN mkdir ipfixcol2-build && cd ipfixcol2-build && cmake ../ipfixcol2 -DCMAKE_BUILD_TYPE=Debug && make && make install
+RUN mkdir ipfixcol2-build \
+	&& cd ipfixcol2-build \
+	&& cmake ../ipfixcol2 -DCMAKE_BUILD_TYPE=Debug \
+	&& make \
+	&& make install
 
-RUN mkdir ipfixcol2-lnfstore-build && cd ipfixcol2-lnfstore-build && cmake ../ipfixcol2/extra_plugins/output/lnfstore -DCMAKE_BUILD_TYPE=Debug && make && make install
+RUN mkdir ipfixcol2-lnfstore-build \
+	&& cd ipfixcol2-lnfstore-build \
+	&& cmake ../ipfixcol2/extra_plugins/output/lnfstore -DCMAKE_BUILD_TYPE=Debug \
+	&& make \
+	&& make install
+
+RUN mkdir ipfixcol2-unirec-build \
+	&& cd ipfixcol2-unirec-build \
+	&& cmake ../ipfixcol2/extra_plugins/output/unirec -DCMAKE_BUILD_TYPE=Debug \
+	&& make \
+	&& make install
 
 COPY startup.xml /usr/local/etc/ipfixcol2/
 EXPOSE 4739/udp
