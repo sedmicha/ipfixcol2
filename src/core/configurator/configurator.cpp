@@ -183,16 +183,6 @@ ipx_configurator::iemgr_load(const std::string dir)
             + fds_iemgr_last_err(new_iemgr.get()));
     }
 
-    if (fds_iemgr_read_aliases(new_iemgr.get(), dir.c_str()) != FDS_OK) {
-        throw std::runtime_error("Failed to load aliases from '" + dir + "': "
-            + fds_iemgr_last_err(new_iemgr.get()));
-    }
-
-    if (fds_iemgr_read_mappings(new_iemgr.get(), dir.c_str()) != FDS_OK) {
-        throw std::runtime_error("Failed to load mappings from '" + dir + "': "
-            + fds_iemgr_last_err(new_iemgr.get()));
-    }
-
     return new_iemgr.release();
 }
 
