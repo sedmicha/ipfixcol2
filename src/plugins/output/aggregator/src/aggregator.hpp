@@ -41,6 +41,8 @@
 
 #pragma once
 
+#define XXH_INLINE_ALL // should yield noticably better performance when hashing smaller data
+
 #include "xxhash.h"
 #include <ipfixcol2.h>
 #include <string>
@@ -48,8 +50,6 @@
 #include <unordered_set>
 #include <cstdint>
 #include <ctime>
-
-#define XXH_INLINE_ALL // should yield noticably better performance when hashing smaller data
 
 constexpr static int FIXEDSTRING_SIZE = 128;
 constexpr static int FLOWCACHE_ITEM_CNT = 65536;
