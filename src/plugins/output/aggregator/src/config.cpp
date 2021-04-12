@@ -47,6 +47,7 @@
 enum {
     ACTIVETIMER,
     PASSIVETIMER,
+    VIEWS,
     VIEW,
     FIELD,
     NAME,
@@ -84,11 +85,16 @@ static const fds_xml_args view_args[] = {
     FDS_OPTS_END
 };
 
+static const fds_xml_args views_args[] = {
+    FDS_OPTS_NESTED(VIEW         , "view"        , view_args        , FDS_OPTS_P_MULTI   ),
+    FDS_OPTS_END
+};
+
 static const fds_xml_args params_args[] = {
     FDS_OPTS_ROOT  ("params"),
-    FDS_OPTS_ELEM  (ACTIVETIMER  , "activeTimer" , FDS_OPTS_T_INT, FDS_OPTS_P_OPT     ),
-    FDS_OPTS_ELEM  (PASSIVETIMER , "passiveTimer", FDS_OPTS_T_INT, FDS_OPTS_P_OPT     ),
-    FDS_OPTS_NESTED(VIEW         , "view"        , view_args     , FDS_OPTS_P_MULTI   ),
+    FDS_OPTS_ELEM  (ACTIVETIMER  , "activeTimer" , FDS_OPTS_T_INT   , FDS_OPTS_P_OPT     ),
+    FDS_OPTS_ELEM  (PASSIVETIMER , "passiveTimer", FDS_OPTS_T_INT   , FDS_OPTS_P_OPT     ),
+    FDS_OPTS_NESTED(VIEWS        , "views"       , views_args       , 0                  ),
     FDS_OPTS_END
 };
 
@@ -309,13 +315,27 @@ parse_view(config_ctx_s *ctx, agg_cfg_s *agg_cfg, fds_xml_ctx_t *xml_ctx)
 }
 
 void
-parse_params(config_ctx_s *ctx, agg_cfg_s *agg_cfg, fds_xml_ctx_t *xml_ctx)
+parse_views(config_ctx_s *ctx, agg_cfg_s *agg_cfg, fds_xml_ctx_t *xml_ctx)
 {
     const struct fds_xml_cont *content;
     while (fds_xml_next(xml_ctx, &content) != FDS_EOC) {
         switch (content->id) {
         case VIEW:
             parse_view(ctx, agg_cfg, content->ptr_ctx);
+            break;
+        default: assert(0);
+        }
+    }
+}
+
+void
+parse_params(config_ctx_s *ctx, agg_cfg_s *agg_cfg, fds_xml_ctx_t *xml_ctx)
+{
+    const struct fds_xml_cont *content;
+    while (fds_xml_next(xml_ctx, &content) != FDS_EOC) {
+        switch (content->id) {
+        case VIEWS:
+            parse_views(ctx, agg_cfg, content->ptr_ctx);
             break;
         case ACTIVETIMER:
             if (content->val_int < 0) {
@@ -333,16 +353,16 @@ parse_params(config_ctx_s *ctx, agg_cfg_s *agg_cfg, fds_xml_ctx_t *xml_ctx)
         }
     }
 
-    if (agg_cfg->active_timer_sec > agg_cfg->passive_timer_sec) {
-        throw std::invalid_argument("activeTimer value cannot be higher than passiveTimer value");
+    if (agg_cfg->passive_timer_sec > agg_cfg->active_timer_sec) {
+        throw std::invalid_argument("passiveTimer value cannot be higher than activeTimer value");
     }
 }
 
 static void
 set_defaults(agg_cfg_s *agg_cfg)
 {
-    agg_cfg->active_timer_sec = 1 * 60;
-    agg_cfg->passive_timer_sec = 10 * 60;
+    agg_cfg->passive_timer_sec = 1 * 60;
+    agg_cfg->active_timer_sec = 10 * 60;
 }
 
 agg_cfg_s
