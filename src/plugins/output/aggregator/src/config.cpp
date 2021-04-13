@@ -58,6 +58,7 @@ enum {
     OPTION,
     OPTELEM,
     OPTTRANSFORM,
+    OUTPUTFILTER,
 };
 
 static const fds_xml_args option_args[] = {
@@ -82,19 +83,20 @@ static const fds_xml_args field_args[] = {
 
 static const fds_xml_args view_args[] = {
     FDS_OPTS_NESTED(FIELD         , "field"         , field_args       , FDS_OPTS_P_MULTI),
+    FDS_OPTS_ELEM  (OUTPUTFILTER  , "outputFilter"  , FDS_OPTS_T_STRING, FDS_OPTS_P_OPT  ),
     FDS_OPTS_END
 };
 
 static const fds_xml_args views_args[] = {
-    FDS_OPTS_NESTED(VIEW          , "view"          , view_args        , FDS_OPTS_P_MULTI   ),
+    FDS_OPTS_NESTED(VIEW          , "view"          , view_args        , FDS_OPTS_P_MULTI),
     FDS_OPTS_END
 };
 
 static const fds_xml_args params_args[] = {
     FDS_OPTS_ROOT  ("params"),
-    FDS_OPTS_ELEM  (ACTIVETIMEOUT , "activeTimeout" , FDS_OPTS_T_INT   , FDS_OPTS_P_OPT     ),
-    FDS_OPTS_ELEM  (PASSIVETIMEOUT, "passiveTimeout", FDS_OPTS_T_INT   , FDS_OPTS_P_OPT     ),
-    FDS_OPTS_NESTED(VIEWS         , "views"         , views_args       , 0                  ),
+    FDS_OPTS_ELEM  (ACTIVETIMEOUT , "activeTimeout" , FDS_OPTS_T_INT   , FDS_OPTS_P_OPT  ),
+    FDS_OPTS_ELEM  (PASSIVETIMEOUT, "passiveTimeout", FDS_OPTS_T_INT   , FDS_OPTS_P_OPT  ),
+    FDS_OPTS_NESTED(VIEWS         , "views"         , views_args       , 0               ),
     FDS_OPTS_END
 };
 
@@ -285,7 +287,7 @@ parse_field(config_ctx_s *ctx, view_cfg_s *view_cfg, fds_xml_ctx_t *xml_ctx)
         }
         field_cfg.name = field_cfg.elem->name;
         if (field_cfg.aggregate != aggfunc_e::NONE) {
-            field_cfg.name += "(" + to_string(field_cfg.aggregate) + ")";
+            field_cfg.name += ":" + to_string(field_cfg.aggregate);
         }
     }
 
@@ -306,6 +308,9 @@ parse_view(config_ctx_s *ctx, agg_cfg_s *agg_cfg, fds_xml_ctx_t *xml_ctx)
         switch (content->id) {
         case FIELD:
             parse_field(ctx, &view_cfg, content->ptr_ctx);
+            break;
+        case OUTPUTFILTER:
+            view_cfg.output_filter = std::string(content->ptr_string);
             break;
         default: assert(0);
         }

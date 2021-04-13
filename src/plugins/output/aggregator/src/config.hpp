@@ -61,6 +61,7 @@ struct field_cfg_s {
 
 struct view_cfg_s {
     std::vector<field_cfg_s>           fields;
+    std::string                        output_filter;
 };
 
 struct agg_cfg_s {

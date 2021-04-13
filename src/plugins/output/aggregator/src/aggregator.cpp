@@ -45,6 +45,9 @@
 #include <unordered_set>
 #include <cassert>
 
+static void
+init_output_filter(view_s *view, const view_cfg_s *view_cfg);
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 /// Set-up
 
@@ -205,6 +208,10 @@ init_view(view_s *view, const view_cfg_s *view_cfg)
 
     view->key_size = key_size;
     view->keybuf.resize(key_size);
+
+    if (!view_cfg->output_filter.empty()) {
+        init_output_filter(view, view_cfg);
+    }
 }
 
 /// Initialize an aggregator instance
@@ -216,13 +223,12 @@ init_agg(agg_s *agg, const agg_cfg_s *cfg)
     agg->active_timeout_sec = cfg->active_timeout_sec;
     agg->passive_timeout_sec = cfg->passive_timeout_sec;
     agg->last_timeout_check = std::time(NULL);
-
+    agg->views.resize(cfg->views.size());
+    int view_idx = 0;
     for (const view_cfg_s &view_cfg : cfg->views) {
-        view_s view;
-        //printf("init view\n");
-        view.agg = agg;
-        init_view(&view, &view_cfg);
-        agg->views.push_back(std::move(view));
+        view_s *view = &agg->views[view_idx++];
+        view->agg = agg;
+        init_view(view, &view_cfg);
     }
 }
 
@@ -276,7 +282,7 @@ extract_value(datatype_e datatype, const fieldfunc_s *transform, fds_drec_field 
             memcpy(buf, drfield.data, drfield.size);
             break;
         case datatype_e::IPADDR:
-            buf[0] = drfield.size; // the ip version
+            buf[0] = drfield.size;
             memcpy(&buf[1], drfield.data, drfield.size);
             break;
         case datatype_e::FIXEDSTRING: {
@@ -410,8 +416,14 @@ writeout_aggfield(const aggfield_s *aggfield, const aggvalue_u *value, FILE *out
 /// \param view     The definition of the view
 /// \param itemptr  Pointer to the flowcache item
 static void
-writeout_flowcache_item(const view_s *view, const flowcache_item_s *item)
+output_flowcache_item(const view_s *view, const flowcache_item_s *item)
 {
+    if (view->output_filter) {
+        if (!fds_filter_eval(view->output_filter.get(), (void *)item->hdr)) {
+            return;
+        }
+    }
+
     fprintf(stdout, "{\n");
     bool first = true;
     const uint8_t *p = item->key;
@@ -543,7 +555,7 @@ view_process_rec(view_s *view, ipx_ipfix_record *rec)
     // cleanup flowcache item
     if (item.hdr->taken && item.hdr->hash == hash && memcmp(item.key, &view->keybuf[0], view->key_size) == 0) {
         //printf("overwrite\n");
-        writeout_flowcache_item(view, &item);
+        output_flowcache_item(view, &item);
 
         p = item.value;
         for (const aggfield_s &aggfield : view->values) {
@@ -606,7 +618,7 @@ flush_flowcache(view_s *view, bool timeout_only = true)
         }
         if (!timeout_only || (now - item.hdr->create_time > view->agg->active_timeout_sec
                 || now - item.hdr->update_time > view->agg->passive_timeout_sec)) {
-            writeout_flowcache_item(view, &item);
+            output_flowcache_item(view, &item);
             uint8_t *p = item.value;
             for (const aggfield_s &aggfield : view->values) {
                 aggvalue_u *aggvalue = (aggvalue_u *)p;
@@ -652,3 +664,151 @@ finish_agg(agg_s *agg)
         flush_flowcache(&view, false);
     }
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/// Output filtering
+
+static int
+lookup_callback(void *user_ctx, const char *name, const char *other_name,
+                int *out_id, int *out_datatype, int *out_flags)
+{
+    view_s *view = (view_s *)user_ctx;
+
+    fil_lookupitem_s lookup;
+    lookup.offset = sizeof(flowcache_itemhdr_s);
+
+    for (const field_s &field : view->keys) {
+        if (field.name == name) {
+            lookup.field_or_aggfield = 0;
+            lookup.field = &field;
+            switch (field.datatype) {
+            case datatype_e::IPADDR:
+            case datatype_e::IPV4ADDR:
+            case datatype_e::IPV6ADDR:
+                *out_datatype = fds_filter_datatype_e::FDS_FDT_IP;
+                break;
+            case datatype_e::UNSIGNED8:
+            case datatype_e::UNSIGNED16:
+            case datatype_e::UNSIGNED32:
+            case datatype_e::UNSIGNED64:
+                *out_datatype = fds_filter_datatype_e::FDS_FDT_UINT;
+                break;
+            case datatype_e::FIXEDSTRING:
+                *out_datatype = fds_filter_datatype_e::FDS_FDT_STR;
+                break;
+            default: assert(0);
+            }
+            *out_id = view->filter_lookup_tab.size();
+            *out_flags = 0;
+            view->filter_lookup_tab.push_back(lookup);
+            return FDS_OK;
+        }
+        lookup.offset += field.size;
+    }
+
+    for (const aggfield_s &aggfield : view->values) {
+        if (aggfield.name == name) {
+            lookup.field_or_aggfield = 1;
+            lookup.aggfield = &aggfield;
+            switch (aggfield.func) {
+            case aggfunc_e::SUM:
+            case aggfunc_e::COUNT:
+            case aggfunc_e::COUNTUNIQUE:
+                *out_datatype = fds_filter_datatype_e::FDS_FDT_UINT;
+                break;
+            default: assert(0);
+            }
+            *out_id = view->filter_lookup_tab.size();
+            *out_flags = 0;
+            view->filter_lookup_tab.push_back(lookup);
+            return FDS_OK;
+        }
+        lookup.offset += aggfield.size;
+    }
+
+    return FDS_ERR_NOTFOUND;
+}
+
+static int
+data_callback(void *user_ctx, bool reset_ctx, int id, void *data, fds_filter_value_u *out_value)
+{
+    view_s *view = (view_s *)user_ctx;
+    fil_lookupitem_s *lookup = &view->filter_lookup_tab[id];
+    switch (lookup->field_or_aggfield) {
+    case 0: {
+        uint8_t *value = (uint8_t *)data + lookup->offset;
+        switch (lookup->field->datatype) {
+            case datatype_e::IPADDR:
+                out_value->ip.version = (value[0] == 4 ? 4 : 16);
+                memcpy(out_value->ip.addr, &value[1], value[0]);
+                break;
+            case datatype_e::IPV4ADDR:
+                out_value->ip.version = 4;
+                memcpy(out_value->ip.addr, value, 4);
+                break;
+            case datatype_e::IPV6ADDR:
+                out_value->ip.version = 6;
+                memcpy(out_value->ip.addr, value, 16);
+                break;
+            case datatype_e::UNSIGNED8:
+                fds_get_uint_be(value, 1, &out_value->u);
+                break;
+            case datatype_e::UNSIGNED16:
+                fds_get_uint_be(value, 2, &out_value->u);
+                break;
+            case datatype_e::UNSIGNED32:
+                fds_get_uint_be(value, 4, &out_value->u);
+                break;
+            case datatype_e::UNSIGNED64:
+                memcpy(out_value->ip.addr, value, 8);
+                break;
+            case datatype_e::FIXEDSTRING:
+                out_value->str.len = value[0];
+                out_value->str.chars = (char *)&value[1];
+                break;
+            default: assert(0);
+        }
+        } break;
+    case 1: {
+        aggvalue_u *aggvalue = (aggvalue_u *)((uint8_t *)data + lookup->offset);
+        switch (lookup->aggfield->func) {
+            case aggfunc_e::SUM:
+                out_value->u = aggvalue->sum.sum;
+                break;
+            case aggfunc_e::COUNT:
+                out_value->u = aggvalue->count.count;
+                break;
+            case aggfunc_e::COUNTUNIQUE:
+                out_value->u = aggvalue->countunique.count;
+                break;
+            default: assert(0);
+        }
+        } break;
+    default: assert(0);
+    }
+    return FDS_OK;
+}
+
+static void
+init_output_filter(view_s *view, const view_cfg_s *view_cfg)
+{
+    view->output_filter_opts = unique_fds_filter_opts(fds_filter_create_default_opts(), &fds_filter_destroy_opts);
+    if (!view->output_filter_opts) {
+        throw std::bad_alloc();
+    }
+
+    fds_filter_opts_set_lookup_cb(view->output_filter_opts.get(), lookup_callback);
+    fds_filter_opts_set_data_cb(view->output_filter_opts.get(), data_callback);
+    fds_filter_opts_set_user_ctx(view->output_filter_opts.get(), view);
+
+    fds_filter_t *filter;
+    if (fds_filter_create(&filter, view_cfg->output_filter.c_str(), view->output_filter_opts.get()) != FDS_OK) {
+        fds_filter_error_s *error = fds_filter_get_error(filter);
+        std::string errmsg = std::string(error->msg);
+        fds_filter_destroy(filter);
+        throw std::runtime_error(errmsg);
+    }
+
+    view->output_filter = unique_fds_filter(filter, &fds_filter_destroy);
+}
+

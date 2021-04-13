@@ -50,6 +50,7 @@
 #include <unordered_set>
 #include <cstdint>
 #include <ctime>
+#include <memory>
 
 constexpr static int FIXEDSTRING_SIZE = 128;
 constexpr static int FLOWCACHE_ITEM_CNT = 65536;
@@ -139,6 +140,18 @@ struct aggfield_s {
     aggfunc_e                      func;
 };
 
+struct fil_lookupitem_s {
+    int                            offset;
+    int                            field_or_aggfield;
+    union {
+        const field_s *            field;
+        const aggfield_s *         aggfield;
+    };
+};
+
+using unique_fds_filter = std::unique_ptr<fds_filter_t, decltype(&fds_filter_destroy)>;
+using unique_fds_filter_opts = std::unique_ptr<fds_filter_opts_t, decltype(&fds_filter_destroy_opts)>;
+
 struct view_s {
     agg_s *                        agg;
     std::vector<field_s>           keys;
@@ -149,6 +162,10 @@ struct view_s {
 
     std::vector<uint8_t>           keybuf;
     int                            key_size;
+
+    unique_fds_filter              output_filter {nullptr, &fds_filter_destroy};
+    unique_fds_filter_opts         output_filter_opts {nullptr, &fds_filter_destroy_opts};
+    std::vector<fil_lookupitem_s>  filter_lookup_tab;
 };
 
 struct aggvalue_sum_s {
