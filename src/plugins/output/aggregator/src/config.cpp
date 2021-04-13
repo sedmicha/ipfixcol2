@@ -45,8 +45,8 @@
 #include <cctype>
 
 enum {
-    ACTIVETIMER,
-    PASSIVETIMER,
+    ACTIVETIMEOUT,
+    PASSIVETIMEOUT,
     VIEWS,
     VIEW,
     FIELD,
@@ -61,40 +61,40 @@ enum {
 };
 
 static const fds_xml_args option_args[] = {
-    FDS_OPTS_ELEM  (OPTELEM      , "elem"        , FDS_OPTS_T_STRING, 0               ),
-    FDS_OPTS_ELEM  (OPTTRANSFORM , "transform"   , FDS_OPTS_T_STRING, FDS_OPTS_P_OPT  ),
+    FDS_OPTS_ELEM  (OPTELEM       , "elem"          , FDS_OPTS_T_STRING, 0               ),
+    FDS_OPTS_ELEM  (OPTTRANSFORM  , "transform"     , FDS_OPTS_T_STRING, FDS_OPTS_P_OPT  ),
     FDS_OPTS_END
 };
 
 static const fds_xml_args firstof_args[] = {
-    FDS_OPTS_NESTED(OPTION       , "option"      , option_args      , FDS_OPTS_P_MULTI),
+    FDS_OPTS_NESTED(OPTION        , "option"        , option_args      , FDS_OPTS_P_MULTI),
     FDS_OPTS_END
 };
 
 static const fds_xml_args field_args[] = {
-    FDS_OPTS_ELEM  (NAME         , "name"        , FDS_OPTS_T_STRING, FDS_OPTS_P_OPT  ),
-    FDS_OPTS_ELEM  (ELEM         , "elem"        , FDS_OPTS_T_STRING, FDS_OPTS_P_OPT  ),
-    FDS_OPTS_ELEM  (TRANSFORM    , "transform"   , FDS_OPTS_T_STRING, FDS_OPTS_P_OPT  ),
-    FDS_OPTS_ELEM  (AGGREGATE    , "aggregate"   , FDS_OPTS_T_STRING, FDS_OPTS_P_OPT  ),
-    FDS_OPTS_NESTED(FIRSTOF      , "firstOf"     , firstof_args     , FDS_OPTS_P_OPT  ),
+    FDS_OPTS_ELEM  (NAME          , "name"          , FDS_OPTS_T_STRING, FDS_OPTS_P_OPT  ),
+    FDS_OPTS_ELEM  (ELEM          , "elem"          , FDS_OPTS_T_STRING, FDS_OPTS_P_OPT  ),
+    FDS_OPTS_ELEM  (TRANSFORM     , "transform"     , FDS_OPTS_T_STRING, FDS_OPTS_P_OPT  ),
+    FDS_OPTS_ELEM  (AGGREGATE     , "aggregate"     , FDS_OPTS_T_STRING, FDS_OPTS_P_OPT  ),
+    FDS_OPTS_NESTED(FIRSTOF       , "firstOf"       , firstof_args     , FDS_OPTS_P_OPT  ),
     FDS_OPTS_END
 };
 
 static const fds_xml_args view_args[] = {
-    FDS_OPTS_NESTED(FIELD        , "field"       , field_args       , FDS_OPTS_P_MULTI),
+    FDS_OPTS_NESTED(FIELD         , "field"         , field_args       , FDS_OPTS_P_MULTI),
     FDS_OPTS_END
 };
 
 static const fds_xml_args views_args[] = {
-    FDS_OPTS_NESTED(VIEW         , "view"        , view_args        , FDS_OPTS_P_MULTI   ),
+    FDS_OPTS_NESTED(VIEW          , "view"          , view_args        , FDS_OPTS_P_MULTI   ),
     FDS_OPTS_END
 };
 
 static const fds_xml_args params_args[] = {
     FDS_OPTS_ROOT  ("params"),
-    FDS_OPTS_ELEM  (ACTIVETIMER  , "activeTimer" , FDS_OPTS_T_INT   , FDS_OPTS_P_OPT     ),
-    FDS_OPTS_ELEM  (PASSIVETIMER , "passiveTimer", FDS_OPTS_T_INT   , FDS_OPTS_P_OPT     ),
-    FDS_OPTS_NESTED(VIEWS        , "views"       , views_args       , 0                  ),
+    FDS_OPTS_ELEM  (ACTIVETIMEOUT , "activeTimeout" , FDS_OPTS_T_INT   , FDS_OPTS_P_OPT     ),
+    FDS_OPTS_ELEM  (PASSIVETIMEOUT, "passiveTimeout", FDS_OPTS_T_INT   , FDS_OPTS_P_OPT     ),
+    FDS_OPTS_NESTED(VIEWS         , "views"         , views_args       , 0                  ),
     FDS_OPTS_END
 };
 
@@ -337,32 +337,32 @@ parse_params(config_ctx_s *ctx, agg_cfg_s *agg_cfg, fds_xml_ctx_t *xml_ctx)
         case VIEWS:
             parse_views(ctx, agg_cfg, content->ptr_ctx);
             break;
-        case ACTIVETIMER:
+        case ACTIVETIMEOUT:
             if (content->val_int < 0) {
-                throw std::invalid_argument("Invalid activeTimer value");
+                throw std::invalid_argument("Invalid activeTimeout value");
             }
-            agg_cfg->active_timer_sec = content->val_int;
+            agg_cfg->active_timeout_sec = content->val_int;
             break;
-        case PASSIVETIMER:
+        case PASSIVETIMEOUT:
             if (content->val_int < 0) {
-                throw std::invalid_argument("Invalid passiveTimer value");
+                throw std::invalid_argument("Invalid passiveTimeout value");
             }
-            agg_cfg->passive_timer_sec = content->val_int;
+            agg_cfg->passive_timeout_sec = content->val_int;
             break;
         default: assert(0);
         }
     }
 
-    if (agg_cfg->passive_timer_sec > agg_cfg->active_timer_sec) {
-        throw std::invalid_argument("passiveTimer value cannot be higher than activeTimer value");
+    if (agg_cfg->passive_timeout_sec > agg_cfg->active_timeout_sec) {
+        throw std::invalid_argument("passiveTimeout value cannot be higher than activeTimeout value");
     }
 }
 
 static void
 set_defaults(agg_cfg_s *agg_cfg)
 {
-    agg_cfg->passive_timer_sec = 1 * 60;
-    agg_cfg->active_timer_sec = 10 * 60;
+    agg_cfg->passive_timeout_sec = 1 * 60;
+    agg_cfg->active_timeout_sec = 10 * 60;
 }
 
 agg_cfg_s

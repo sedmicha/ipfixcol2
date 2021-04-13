@@ -53,6 +53,7 @@
 
 constexpr static int FIXEDSTRING_SIZE = 128;
 constexpr static int FLOWCACHE_ITEM_CNT = 65536;
+constexpr static int TIMEOUT_CHECK_INTERVAL_SECS = 5;
 
 static_assert(FIXEDSTRING_SIZE - 1 <= UINT8_MAX);
 
@@ -65,6 +66,8 @@ struct u8vec_hasher {
 };
 
 using set_of_u8vec = std::unordered_set<std::vector<uint8_t>, u8vec_hasher>;
+
+struct agg_s;
 
 enum class aggfunc_e {
     NONE,
@@ -137,6 +140,7 @@ struct aggfield_s {
 };
 
 struct view_s {
+    agg_s *                        agg;
     std::vector<field_s>           keys;
     std::vector<aggfield_s>        values;
 
@@ -167,23 +171,23 @@ union aggvalue_u {
 };
 
 struct flowcache_itemhdr_s {
-    uint16_t                       active:1;
     uint16_t                       taken:1;
-    uint16_t                       hash:14;
+    uint16_t                       hash:15;
+    uint16_t                       create_time;
+    uint16_t                       update_time;
 };
 
 struct flowcache_item_s {
-    flowcache_itemhdr_s            *hdr;
-    uint8_t                        *key;
-    uint8_t                        *value;
+    flowcache_itemhdr_s *          hdr;
+    uint8_t *                      key;
+    uint8_t *                      value;
 };
 
 struct agg_s {
     std::vector<view_s>            views;
-    int                            active_timer_interval;
-    int                            passive_timer_interval;
-    std::time_t                    last_active_timer;
-    std::time_t                    last_passive_timer;
+    int                            active_timeout_sec;
+    int                            passive_timeout_sec;
+    std::time_t                    last_timeout_check;
 };
 
 struct agg_cfg_s;

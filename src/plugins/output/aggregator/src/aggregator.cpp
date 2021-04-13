@@ -213,15 +213,14 @@ init_view(view_s *view, const view_cfg_s *view_cfg)
 void
 init_agg(agg_s *agg, const agg_cfg_s *cfg)
 {
-    std::time_t now = std::time(NULL);
-    agg->active_timer_interval = cfg->active_timer_sec;
-    agg->passive_timer_interval = cfg->passive_timer_sec;
-    agg->last_active_timer = now;
-    agg->last_passive_timer = now;
+    agg->active_timeout_sec = cfg->active_timeout_sec;
+    agg->passive_timeout_sec = cfg->passive_timeout_sec;
+    agg->last_timeout_check = std::time(NULL);
 
     for (const view_cfg_s &view_cfg : cfg->views) {
         view_s view;
         //printf("init view\n");
+        view.agg = agg;
         init_view(&view, &view_cfg);
         agg->views.push_back(std::move(view));
     }
@@ -555,6 +554,8 @@ view_process_rec(view_s *view, ipx_ipfix_record *rec)
         item.hdr->taken = 0;
     }
 
+    uint16_t now = std::time(NULL) & 0xFFFF;
+
     // set up flowcache item
     if (!item.hdr->taken) {
         //printf("new item\n");
@@ -563,6 +564,7 @@ view_process_rec(view_s *view, ipx_ipfix_record *rec)
 
         item.hdr->hash = hash;
         item.hdr->taken = 1;
+        item.hdr->create_time = now;
         memcpy(item.key, &view->keybuf[0], view->key_size);
 
         p = item.value;
@@ -573,7 +575,7 @@ view_process_rec(view_s *view, ipx_ipfix_record *rec)
         }
     }
 
-    item.hdr->active = true;
+    item.hdr->update_time = now;
 
     // perform aggregation
     p = item.value;
@@ -591,14 +593,19 @@ view_process_rec(view_s *view, ipx_ipfix_record *rec)
 }
 
 /// Write out and clean out taken flowcache items
-/// \param view       The view
-/// \param flush_all  Flushes only inactive items if false, flushes all taken items if true
+/// \param view          The view
+/// \param timeout_only  Flushes only items that timed out if true, flushes all if false
 static void
-flush_flowcache(view_s *view, bool flush_all = false)
+flush_flowcache(view_s *view, bool timeout_only = true)
 {
+    uint16_t now = std::time(NULL) & 0xFFFF;
     for (int i = 0; i < FLOWCACHE_ITEM_CNT; i++) {
         flowcache_item_s item = flowcache_index(view, i);
-        if (item.hdr->taken && (!item.hdr->active || flush_all)) {
+        if (!item.hdr->taken) {
+            continue;
+        }
+        if (!timeout_only || (now - item.hdr->create_time > view->agg->active_timeout_sec
+                || now - item.hdr->update_time > view->agg->passive_timeout_sec)) {
             writeout_flowcache_item(view, &item);
             uint8_t *p = item.value;
             for (const aggfield_s &aggfield : view->values) {
@@ -608,17 +615,6 @@ flush_flowcache(view_s *view, bool flush_all = false)
             }
             item.hdr->taken = 0;
         }
-    }
-}
-
-/// Reset the active flag of all the flowcache items in the view
-/// \param view  The view
-static void
-flowcache_reset_active(view_s *view)
-{
-    for (int i = 0; i < FLOWCACHE_ITEM_CNT; i++) {
-        flowcache_item_s item = flowcache_index(view, i);
-        item.hdr->active = 0;
     }
 }
 
@@ -638,19 +634,11 @@ agg_process_ipfix_msg(agg_s *agg, ipx_msg_ipfix *msg)
     }
 
     std::time_t now = std::time(NULL);
-    if (now - agg->last_passive_timer >= agg->passive_timer_interval) {
+    if (now - agg->last_timeout_check > TIMEOUT_CHECK_INTERVAL_SECS) {
         for (view_s &view : agg->views) {
             flush_flowcache(&view, true);
         }
-        agg->last_passive_timer = now;
-        agg->last_active_timer = now;
-
-    } else if (now - agg->last_active_timer >= agg->active_timer_interval) {
-        for (view_s &view : agg->views) {
-            flush_flowcache(&view, false);
-            flowcache_reset_active(&view);
-        }
-        agg->last_active_timer = now;
+        agg->last_timeout_check = now;
     }
 }
 
@@ -661,6 +649,6 @@ finish_agg(agg_s *agg)
 {
     //printf("finish\n");
     for (view_s &view : agg->views) {
-        flush_flowcache(&view, true);
+        flush_flowcache(&view, false);
     }
 }
