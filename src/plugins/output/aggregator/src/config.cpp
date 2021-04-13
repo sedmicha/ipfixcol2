@@ -94,8 +94,8 @@ static const fds_xml_args views_args[] = {
 
 static const fds_xml_args params_args[] = {
     FDS_OPTS_ROOT  ("params"),
-    FDS_OPTS_ELEM  (ACTIVETIMEOUT , "activeTimeout" , FDS_OPTS_T_INT   , FDS_OPTS_P_OPT  ),
-    FDS_OPTS_ELEM  (PASSIVETIMEOUT, "passiveTimeout", FDS_OPTS_T_INT   , FDS_OPTS_P_OPT  ),
+    FDS_OPTS_ELEM  (ACTIVETIMEOUT , "activeTimeout" , FDS_OPTS_T_UINT  , FDS_OPTS_P_OPT  ),
+    FDS_OPTS_ELEM  (PASSIVETIMEOUT, "passiveTimeout", FDS_OPTS_T_UINT  , FDS_OPTS_P_OPT  ),
     FDS_OPTS_NESTED(VIEWS         , "views"         , views_args       , 0               ),
     FDS_OPTS_END
 };
@@ -343,16 +343,16 @@ parse_params(config_ctx_s *ctx, agg_cfg_s *agg_cfg, fds_xml_ctx_t *xml_ctx)
             parse_views(ctx, agg_cfg, content->ptr_ctx);
             break;
         case ACTIVETIMEOUT:
-            if (content->val_int < 0) {
-                throw std::invalid_argument("Invalid activeTimeout value");
+            if (content->val_uint > 65535) {
+                throw std::invalid_argument("activeTimeout value cannot be > 65535 seconds");
             }
-            agg_cfg->active_timeout_sec = content->val_int;
+            agg_cfg->active_timeout_sec = content->val_uint;
             break;
         case PASSIVETIMEOUT:
-            if (content->val_int < 0) {
-                throw std::invalid_argument("Invalid passiveTimeout value");
+            if (content->val_uint > 65535) {
+                throw std::invalid_argument("passiveTimeout value cannot be > 65535 seconds");
             }
-            agg_cfg->passive_timeout_sec = content->val_int;
+            agg_cfg->passive_timeout_sec = content->val_uint;
             break;
         default: assert(0);
         }

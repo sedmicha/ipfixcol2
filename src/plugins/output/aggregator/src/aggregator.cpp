@@ -72,7 +72,7 @@ get_datatype(const fds_iemgr_elem *elem)
 /// Get size of a value
 /// \param datatype  The datatype of a value
 /// \return The size
-static int
+static unsigned
 get_value_size(datatype_e datatype)
 {
     switch (datatype) {
@@ -90,7 +90,7 @@ get_value_size(datatype_e datatype)
 
 /// Get size of an aggregated value
 /// \param func  The aggregation function
-static int
+static unsigned
 get_aggvalue_size(aggfunc_e func)
 {
     switch (func) {
@@ -107,7 +107,6 @@ static field_s
 make_basic_field(const field_cfg_s *field_cfg)
 {
     field_s field = {};
-    field.kind = fieldkind_e::BASIC;
     field.pen = field_cfg->elem->scope->pen;
     field.id = field_cfg->elem->id;
     field.datatype = get_datatype(field_cfg->elem);
@@ -123,7 +122,6 @@ static field_s
 make_firstof_field(const field_cfg_s *field_cfg)
 {
     field_s field = {};
-    field.kind = fieldkind_e::FIRSTOF;
     field.name = field_cfg->name;
     for (const firstof_option_cfg_s &opt_cfg : field_cfg->firstof) {
         field_s::firstof_option_s opt = {};
@@ -181,8 +179,8 @@ make_aggfield(const field_cfg_s *field_cfg)
 static void
 init_view(view_s *view, const view_cfg_s *view_cfg)
 {
-    int item_size = sizeof(flowcache_itemhdr_s);
-    int key_size = 0;
+    unsigned item_size = sizeof(flowcache_itemhdr_s);
+    unsigned key_size = 0;
 
     //printf("loop fields\n");
     for (const field_cfg_s &field_cfg : view_cfg->fields) {
@@ -321,14 +319,11 @@ extract_value(datatype_e datatype, const fieldfunc_s *transform, fds_drec_field 
 static int
 find_drec_field(const field_s *field, fds_drec drec, fds_drec_field *drfield)
 {
-    switch (field->kind) {
-    case fieldkind_e::BASIC:
+    if (field->firstof.empty()) {
         if (fds_drec_find(&drec, field->pen, field->id, drfield) == FDS_EOC) {
             return 0;
         }
-        break;
-
-    case fieldkind_e::FIRSTOF: {
+    } else {
         bool found = false;
         for (const field_s::firstof_option_s &opt : field->firstof) {
             if (fds_drec_find(&drec, opt.pen, opt.id, drfield) != FDS_EOC) {
@@ -339,11 +334,7 @@ find_drec_field(const field_s *field, fds_drec drec, fds_drec_field *drfield)
         if (!found) {
             return 0;
         }
-        } break;
-
-    default: assert(0);
     }
-
     return 1;
 }
 
@@ -355,7 +346,7 @@ find_drec_field(const field_s *field, fds_drec drec, fds_drec_field *drfield)
 static void
 writeout_field(const field_s *field, const uint8_t *val, FILE *outstream)
 {
-    constexpr int bufsize = 256;
+    constexpr unsigned bufsize = 256;
     char buf[bufsize];
 
     fprintf(outstream, "\"%s\": ", field->name.c_str());
@@ -521,9 +512,9 @@ process_aggfield_value(const aggfield_s *aggfield, aggvalue_u *value, fds_drec_f
 /// \param i       The index
 /// \return The flowcache item
 static flowcache_item_s
-flowcache_index(const view_s *view, int i)
+flowcache_index(const view_s *view, unsigned i)
 {
-    assert(i >= 0 && i < FLOWCACHE_ITEM_CNT);
+    assert(i < FLOWCACHE_ITEM_CNT);
     flowcache_item_s item = {};
     item.hdr = (flowcache_itemhdr_s *)&view->flowcache[i * view->item_size];
     item.key = (uint8_t *)item.hdr + sizeof(flowcache_itemhdr_s);
@@ -611,7 +602,7 @@ static void
 flush_flowcache(view_s *view, bool timeout_only = true)
 {
     uint16_t now = std::time(NULL) & 0xFFFF;
-    for (int i = 0; i < FLOWCACHE_ITEM_CNT; i++) {
+    for (unsigned i = 0; i < FLOWCACHE_ITEM_CNT; i++) {
         flowcache_item_s item = flowcache_index(view, i);
         if (!item.hdr->taken) {
             continue;
@@ -637,8 +628,8 @@ void
 agg_process_ipfix_msg(agg_s *agg, ipx_msg_ipfix *msg)
 {
     //printf("process\n");
-    int drec_cnt = ipx_msg_ipfix_get_drec_cnt(msg);
-    for (int i = 0; i < drec_cnt; i++) {
+    unsigned drec_cnt = ipx_msg_ipfix_get_drec_cnt(msg);
+    for (unsigned i = 0; i < drec_cnt; i++) {
         ipx_ipfix_record *rec = ipx_msg_ipfix_get_drec(msg, i);
         for (view_s &view : agg->views) {
             view_process_rec(&view, rec);
@@ -669,12 +660,12 @@ finish_agg(agg_s *agg)
 /// Output filtering
 
 static int
-lookup_callback(void *user_ctx, const char *name, const char *other_name,
+lookup_callback(void *user_ctx, const char *name, const char *,
                 int *out_id, int *out_datatype, int *out_flags)
 {
     view_s *view = (view_s *)user_ctx;
 
-    fil_lookupitem_s lookup;
+    filter_lookup_s lookup;
     lookup.offset = sizeof(flowcache_itemhdr_s);
 
     for (const field_s &field : view->keys) {
@@ -730,10 +721,10 @@ lookup_callback(void *user_ctx, const char *name, const char *other_name,
 }
 
 static int
-data_callback(void *user_ctx, bool reset_ctx, int id, void *data, fds_filter_value_u *out_value)
+data_callback(void *user_ctx, bool , int id, void *data, fds_filter_value_u *out_value)
 {
     view_s *view = (view_s *)user_ctx;
-    fil_lookupitem_s *lookup = &view->filter_lookup_tab[id];
+    filter_lookup_s *lookup = &view->filter_lookup_tab[id];
     switch (lookup->field_or_aggfield) {
     case 0: {
         uint8_t *value = (uint8_t *)data + lookup->offset;

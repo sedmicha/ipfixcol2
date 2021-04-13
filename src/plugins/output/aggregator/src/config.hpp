@@ -66,8 +66,8 @@ struct view_cfg_s {
 
 struct agg_cfg_s {
     std::vector<view_cfg_s>            views;
-    int                                active_timeout_sec;
-    int                                passive_timeout_sec;
+    uint16_t                           active_timeout_sec;
+    uint16_t                           passive_timeout_sec;
 };
 
 agg_cfg_s

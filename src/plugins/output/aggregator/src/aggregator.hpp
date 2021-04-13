@@ -68,6 +68,9 @@ struct u8vec_hasher {
 
 using set_of_u8vec = std::unordered_set<std::vector<uint8_t>, u8vec_hasher>;
 
+using unique_fds_filter = std::unique_ptr<fds_filter_t, decltype(&fds_filter_destroy)>;
+using unique_fds_filter_opts = std::unique_ptr<fds_filter_opts_t, decltype(&fds_filter_destroy_opts)>;
+
 struct agg_s;
 
 enum class aggfunc_e {
@@ -106,18 +109,11 @@ struct fieldfunc_s {
     fieldfuncargs_u                args;
 };
 
-enum class fieldkind_e {
-    NONE,
-    BASIC,
-    FIRSTOF
-};
-
 struct field_s {
     /// General information
-    fieldkind_e                    kind;
     std::string                    name;
     datatype_e                     datatype;
-    int                            size;
+    unsigned                       size;
 
     /// Relevant in case of a basic field
     uint32_t                       pen;
@@ -135,22 +131,22 @@ struct field_s {
 
 struct aggfield_s {
     std::string                    name;
-    int                            size;
+    unsigned                       size;
     field_s                        src_field;
     aggfunc_e                      func;
 };
 
-struct fil_lookupitem_s {
-    int                            offset;
+struct filter_lookup_s {
+    /// The offset of the value in the flowcache item, including the item header
+    unsigned                       offset;
+    /// Specified whether field or aggfield is taken - 0 if field, 1 if aggfield
     int                            field_or_aggfield;
+    /// The field of the looked up value
     union {
         const field_s *            field;
         const aggfield_s *         aggfield;
     };
 };
-
-using unique_fds_filter = std::unique_ptr<fds_filter_t, decltype(&fds_filter_destroy)>;
-using unique_fds_filter_opts = std::unique_ptr<fds_filter_opts_t, decltype(&fds_filter_destroy_opts)>;
 
 struct view_s {
     agg_s *                        agg;
@@ -158,28 +154,28 @@ struct view_s {
     std::vector<aggfield_s>        values;
 
     std::vector<uint8_t>           flowcache;
-    int                            item_size;
+    unsigned                       item_size;
 
     std::vector<uint8_t>           keybuf;
-    int                            key_size;
+    unsigned                       key_size;
 
-    unique_fds_filter              output_filter {nullptr, &fds_filter_destroy};
-    unique_fds_filter_opts         output_filter_opts {nullptr, &fds_filter_destroy_opts};
-    std::vector<fil_lookupitem_s>  filter_lookup_tab;
+    unique_fds_filter              output_filter       {nullptr, &fds_filter_destroy};
+    unique_fds_filter_opts         output_filter_opts  {nullptr, &fds_filter_destroy_opts};
+    std::vector<filter_lookup_s>   filter_lookup_tab;
 };
 
 struct aggvalue_sum_s {
     uint64_t                       sum;
-} __attribute__((packed));
+};
 
 struct aggvalue_count_s {
     uint64_t                       count;
-} __attribute__((packed));
+};
 
 struct aggvalue_countunique_s {
     set_of_u8vec                   set;
     uint64_t                       count;
-} __attribute__((packed));
+};
 
 union aggvalue_u {
     aggvalue_sum_s                 sum;
@@ -202,8 +198,8 @@ struct flowcache_item_s {
 
 struct agg_s {
     std::vector<view_s>            views;
-    int                            active_timeout_sec;
-    int                            passive_timeout_sec;
+    uint16_t                       active_timeout_sec;
+    uint16_t                       passive_timeout_sec;
     std::time_t                    last_timeout_check;
 };
 
