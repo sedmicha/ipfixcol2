@@ -47,6 +47,12 @@ and schema of the table is checked after initiating connection to the database
 and an error is displayed if there is a mismatch. The table is not
 automatically created.
 
+To aid in initial setup, a script `schema-helper.py` is included. The script
+runs ipfixcol2 for a brief period of time to observe structure of the flow data
+that is being received, and then generates a ClickHouse schema SQL and a
+ipfixcol2 config XML. The generated files can be used as an easier starting
+point as opposed to doing everything manually.
+
 To run the example configuration below, you can create the ClickHouse table
 using the following SQL query:
 
